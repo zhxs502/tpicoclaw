@@ -4101,3 +4101,76 @@ func TestHandleFetchModels_ModelIndexProviderMismatchRejectsKey(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	mux.ServeHTTP(rec, req)
 }
+
+func TestHandleSetDefaultModel_RepointsAgentsFollowingDefault(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	cfg.ModelList = append(cfg.ModelList, openAIModelConfig("gpt-4o"), anthropicModelConfig("claude"))
+	cfg.Agents.List = []config.AgentConfig{
+		{ID: "main", Model: &config.AgentModelConfig{Primary: "custom-default"}},
+		{ID: "kimi", Model: &config.AgentModelConfig{Primary: "claude"}},
+		{ID: "inherit"},
+		{
+			ID:        "sub",
+			Model:     &config.AgentModelConfig{Primary: "custom-default"},
+			Subagents: &config.SubagentsConfig{Model: &config.AgentModelConfig{Primary: "custom-default"}},
+		},
+	}
+	if err = config.SaveConfig(configPath, cfg); err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+
+	got := setDefaultModelAndLoadConfig(t, configPath, "gpt-4o")
+	if got.Agents.Defaults.ModelName != "gpt-4o" {
+		t.Fatalf("default model = %q, want gpt-4o", got.Agents.Defaults.ModelName)
+	}
+
+	agents := map[string]config.AgentConfig{}
+	for _, agent := range got.Agents.List {
+		agents[agent.ID] = agent
+	}
+	if pin := agents["main"].Model; pin == nil || pin.Primary != "gpt-4o" {
+		t.Fatalf("main model = %#v, want gpt-4o", pin)
+	}
+	if pin := agents["kimi"].Model; pin == nil || pin.Primary != "claude" {
+		t.Fatalf("kimi model = %#v, want unchanged claude", pin)
+	}
+	if pin := agents["inherit"].Model; pin != nil {
+		t.Fatalf("inherit model = %#v, want nil", pin)
+	}
+	if pin := agents["sub"].Model; pin == nil || pin.Primary != "gpt-4o" {
+		t.Fatalf("sub model = %#v, want gpt-4o", pin)
+	}
+	if pin := agents["sub"].Subagents.Model; pin == nil || pin.Primary != "gpt-4o" {
+		t.Fatalf("sub subagent model = %#v, want gpt-4o", pin)
+	}
+}
+
+func TestHandleSetDefaultModel_RepointsAgentPinnedToConcreteModelID(t *testing.T) {
+	configPath, cleanup := setupOAuthTestEnv(t)
+	defer cleanup()
+
+	// A hot config reload can leave defaults.model_name as the alias while an
+	// agent pin already holds the provider's concrete model id (or vice versa).
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	cfg.ModelList = append(cfg.ModelList, openAIModelConfig("gpt-4o"))
+	cfg.Agents.List = []config.AgentConfig{
+		{ID: "main", Model: &config.AgentModelConfig{Primary: "openai/gpt-4o"}},
+	}
+	if err = config.SaveConfig(configPath, cfg); err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+
+	got := setDefaultModelAndLoadConfig(t, configPath, "gpt-4o")
+	if pin := got.Agents.List[0].Model; pin == nil || pin.Primary != "gpt-4o" {
+		t.Fatalf("main model = %#v, want gpt-4o", pin)
+	}
+}

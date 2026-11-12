@@ -1000,7 +1000,58 @@ func replaceModelName(names []string, oldName string, newName string) []string {
 	return replaced
 }
 
-// handleSetDefaultModel sets the default model for all agents.
+// repointPinnedDefaultAgents rewrites agent-level model pins that were tracking
+// the previous global default, so switching the default in the UI actually takes
+// effect for them. Agents pinned to any other model (e.g. a dedicated kimi
+// agent) are left untouched.
+func repointPinnedDefaultAgents(cfg *config.Config, oldDefault, newDefault string) {
+	if cfg == nil || oldDefault == "" || oldDefault == newDefault {
+		return
+	}
+	pin := func(model *config.AgentModelConfig) {
+		if !followsGlobalDefault(model, oldDefault, cfg.ModelList) {
+			return
+		}
+		model.Primary = newDefault
+		model.Fallbacks = removeModelName(model.Fallbacks, newDefault)
+	}
+	for i := range cfg.Agents.List {
+		pin(cfg.Agents.List[i].Model)
+		if cfg.Agents.List[i].Subagents != nil {
+			pin(cfg.Agents.List[i].Subagents.Model)
+		}
+	}
+}
+
+// followsGlobalDefault reports whether an agent-level pin is really just a copy
+// of the global default. A hot config reload can rewrite defaults.model_name to
+// the provider's concrete model id while the agent pin still holds the alias, so
+// the model_list row of oldDefault is accepted as well.
+func followsGlobalDefault(model *config.AgentModelConfig, oldDefault string, list []*config.ModelConfig) bool {
+	if model == nil {
+		return false
+	}
+	pin := strings.TrimSpace(model.Primary)
+	if pin == "" {
+		return false
+	}
+	oldDefault = strings.TrimSpace(oldDefault)
+	if pin == oldDefault {
+		return true
+	}
+	for _, mc := range list {
+		if mc == nil || strings.TrimSpace(mc.ModelName) != oldDefault {
+			continue
+		}
+		if strings.TrimSpace(mc.Model) == pin {
+			return true
+		}
+	}
+	return false
+}
+
+// handleSetDefaultModel sets the global default model and repoints every agent
+// that was following it. Agents pinned to a different model keep their pin.
 //
 //	POST /api/models/default
 func (h *Handler) handleSetDefaultModel(w http.ResponseWriter, r *http.Request) {
@@ -1051,8 +1102,10 @@ func (h *Handler) handleSetDefaultModel(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	oldDefault := strings.TrimSpace(cfg.Agents.Defaults.ModelName)
 	cfg.Agents.Defaults.ModelName = modelName
 	cfg.Agents.Defaults.ModelFallbacks = removeModelName(cfg.Agents.Defaults.ModelFallbacks, modelName)
+	repointPinnedDefaultAgents(cfg, oldDefault, modelName)
 	normalizeDefaultChainReferences(cfg)
 
 	if err := config.SaveConfig(h.configPath, cfg); err != nil {
