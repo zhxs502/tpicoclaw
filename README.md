@@ -115,8 +115,14 @@ Full guide: [English](docs/guides/workspace-isolation.md) · [中文](docs/guide
 
 The `.so` files are the same Android/arm64 PIE executables renamed for
 `jniLibs` — they are **not** `-buildmode=c-shared` JNI libraries. Extract them
-before exec (`android:extractNativeLibs="true"`) and run `libpicoclaw-web.so`
-as a process.
+before exec (`android:extractNativeLibs="true"`). The launcher looks for a
+`picoclaw` binary in its own directory, so point it at the renamed gateway:
+
+```bash
+PICOCLAW_BINARY=/path/to/arm64-v8a/libpicoclaw.so ./libpicoclaw-web.so -no-browser
+```
+
+APK integrations normally set `PICOCLAW_BINARY` themselves.
 
 The launcher looks for the gateway binary (`picoclaw.exe` on Windows,
 `picoclaw` elsewhere) **in its own directory**, so keep both files together.
