@@ -24,6 +24,9 @@
 
 ---
 
+> [!NOTE]
+> **This fork** ([`zhxs502/tpicoclaw`](https://github.com/zhxs502/tpicoclaw)) adds **per-API-key isolated workspaces** on top of [sipeed/picoclaw](https://github.com/sipeed/picoclaw). Prebuilt **Windows x64 / Linux amd64 / Android arm64** binaries are on the [Releases](https://github.com/zhxs502/tpicoclaw/releases) page. See [Workspace Isolation](#workspace-isolation-fork-feature) below.
+
 > **PicoClaw** is an independent open-source project initiated by [Sipeed](https://sipeed.com), written entirely in **Go** from scratch — not a fork of OpenClaw, NanoBot, or any other project.
 
 **PicoClaw** is an ultra-lightweight personal AI assistant inspired by [NanoBot](https://github.com/HKUDS/nanobot). It was rebuilt from the ground up in **Go** through a "self-bootstrapping" process — the AI Agent itself drove the architecture migration and code optimization.
@@ -53,6 +56,94 @@
 > * **BEWARE:** Many `.ai/.org/.com/.net/...` domains have been registered by third parties. Do not trust them.
 > * **NOTE:** PicoClaw is in early rapid development. There may be unresolved security issues. Do not deploy to production before v1.0.
 > * **NOTE:** PicoClaw has recently merged many PRs. Recent builds may use 10-20MB RAM. Resource optimization is planned after feature stabilization.
+
+## Workspace Isolation (fork feature)
+
+Bind model **API keys** to separate workspace directories. An agent whose primary
+model uses a bound key reads, writes, runs commands, stores sessions, and loads
+skills/memory inside that directory. Unbound keys and local models keep using
+`agents.defaults.workspace`.
+
+### Web UI
+
+1. **Models** — add models with API keys (as usual).
+2. **Workspaces** — enable isolation, create a workspace (name + absolute path,
+   e.g. `D:\picoclaw-workspaces\team-a`). Changes save automatically.
+3. Assign the target API key to the workspace. Creating or assigning a workspace
+   enables isolation automatically.
+4. Click **Restart gateway** in the yellow banner (unless `gateway.hot_reload`
+   is enabled).
+5. The **Agent workspaces** table at the bottom shows the effective directory of
+   every configured agent. If the key of the model handling your chat is not
+   bound, chat keeps using the default workspace.
+
+### Configuration
+
+```json
+{
+  "workspace_isolation": {
+    "enabled": true,
+    "profiles": [
+      {
+        "id": "team-a",
+        "name": "Team A",
+        "path": "~/.picoclaw/workspaces/team-a",
+        "restrict_to_workspace": true,
+        "allow_read_outside_workspace": false,
+        "api_key_fingerprints": ["sha256:3f6a1c0d9e42b7a5"]
+      }
+    ]
+  }
+}
+```
+
+`api_key_fingerprints` contains truncated SHA-256 fingerprints of the configured
+keys (the raw keys remain in `.security.yml`). `restrict_to_workspace` and
+`allow_read_outside_workspace` optionally override the global defaults for
+agents bound to that profile.
+
+Full guide: [English](docs/guides/workspace-isolation.md) · [中文](docs/guides/workspace-isolation.zh.md).
+
+### Downloads
+
+| Platform | Assets |
+| --- | --- |
+| Windows x64 | `picoclaw-windows-amd64.zip` (`picoclaw.exe` + `picoclaw-launcher.exe`) |
+| Linux amd64 | `picoclaw-linux-amd64.zip` (`picoclaw` + `picoclaw-launcher`) |
+| Android arm64 | `picoclaw-android-arm64.zip` (Termux; run from `$HOME`) |
+
+The launcher looks for the gateway binary (`picoclaw.exe` on Windows,
+`picoclaw` elsewhere) **in its own directory**, so keep both files together.
+On Linux/Android run `chmod +x picoclaw picoclaw-launcher` first.
+
+### Build from source
+
+```bash
+CGO_ENABLED=0 go build -tags goolm,stdjson -o picoclaw ./cmd/picoclaw
+CGO_ENABLED=0 go build -tags goolm,stdjson -o picoclaw-launcher ./web/backend/
+```
+
+The launcher embeds the Web UI. To rebuild the frontend first:
+
+```bash
+cd web/frontend
+pnpm install --node-linker=hoisted
+pnpm exec vite build --outDir ../backend/dist --emptyOutDir
+```
+
+Android uses `-tags stdjson` and `GOOS=android GOARCH=arm64`.
+
+### Behavior notes
+
+- Workspace is resolved once per agent instance, from the API key of the
+  agent's **primary model**. Restart the gateway or enable `gateway.hot_reload`
+  after changing the layout.
+- One model entry with multiple keys is expanded into `name`,
+  `name__key_1`, … — each key can be bound separately.
+- Load-balanced aliases (several entries sharing one `model_name`) use the
+  first entry for workspace selection; bind all their keys to the same profile.
+- Session history, the session list, and the skills page follow the active
+  workspace. `pkg/isolation` child-process sandboxing is configured separately.
 
 ## 📢 News
 
