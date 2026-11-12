@@ -41,8 +41,9 @@ function toChatAttachments({
 
 export async function loadSessionMessages(
   sessionId: string,
+  workspace?: string,
 ): Promise<ChatMessage[]> {
-  const detail = await getSessionHistory(sessionId)
+  const detail = await getSessionHistory(sessionId, workspace)
   return detail.messages.map((message, index) => ({
     id: `hist-${index}-${Date.now()}`,
     role: message.role,

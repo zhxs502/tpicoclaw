@@ -230,6 +230,10 @@ func (al *AgentLoop) resolveMessageRoute(msg bus.InboundMessage) (routing.Resolv
 		return routing.ResolvedRoute{}, nil, fmt.Errorf("no agent available for route (agent_id=%s)", route.AgentID)
 	}
 
+	// A chat may select one of the configured workspace profiles; run this turn
+	// with a workspace variant of the routed agent when one is requested.
+	agent = al.resolveWorkspaceAgent(agent, &inboundCtx)
+
 	return route, agent, nil
 }
 

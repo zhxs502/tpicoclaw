@@ -69,6 +69,10 @@ type AgentLoop struct {
 	activeTurnStates sync.Map
 	subTurnCounter   atomic.Int64
 
+	// workspaceAgents caches per-chat workspace variants of registered agents.
+	workspaceAgentsMu sync.Mutex
+	workspaceAgents   sync.Map
+
 	turnSeq atomic.Uint64
 
 	// activeReqMu/activeReqCond/activeReqCount replace sync.WaitGroup to
@@ -344,6 +348,7 @@ func (al *AgentLoop) Close() {
 		}
 	}
 
+	al.closeWorkspaceAgents()
 	al.GetRegistry().Close()
 	if al.hooks != nil {
 		al.hooks.Close()
@@ -425,6 +430,9 @@ func (al *AgentLoop) ReloadProviderAndConfig(
 				map[string]any{"error": err.Error()})
 		}
 	}
+
+	// Close workspace variants that were built from the previous config.
+	al.closeWorkspaceAgents()
 
 	// Atomically swap the config and registry under write lock
 	// This ensures readers see a consistent pair

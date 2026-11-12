@@ -59,23 +59,17 @@
 
 ## Workspace Isolation (fork feature)
 
-Bind model **API keys** to separate workspace directories. An agent whose primary
-model uses a bound key reads, writes, runs commands, stores sessions, and loads
-skills/memory inside that directory. Unbound keys and local models keep using
-`agents.defaults.workspace`.
+Define named workspace directories (**name → path**) in the Web UI, then pick one
+next to the model selector in **Chat**. The same model can run against different
+workspaces; each workspace keeps its own sessions, files, skills and memory.
 
 ### Web UI
 
-1. **Models** — add models with API keys (as usual).
-2. **Workspaces** — enable isolation, create a workspace (name + absolute path,
-   e.g. `D:\picoclaw-workspaces\team-a`). Changes save automatically.
-3. Assign the target API key to the workspace. Creating or assigning a workspace
-   enables isolation automatically.
-4. Click **Restart gateway** in the yellow banner (unless `gateway.hot_reload`
-   is enabled).
-5. The **Agent workspaces** table at the bottom shows the effective directory of
-   every configured agent. If the key of the model handling your chat is not
-   bound, chat keeps using the default workspace.
+1. **Workspaces** — create a workspace (name + absolute path). Changes save
+   automatically; click **Restart gateway** when the yellow banner appears.
+2. **Chat** — choose the workspace next to the model selector. Switching
+   workspace starts a new chat so histories stay separate.
+3. With no workspace selected, chat uses `agents.defaults.workspace`.
 
 ### Configuration
 
@@ -89,18 +83,22 @@ skills/memory inside that directory. Unbound keys and local models keep using
         "name": "Team A",
         "path": "~/.picoclaw/workspaces/team-a",
         "restrict_to_workspace": true,
-        "allow_read_outside_workspace": false,
-        "api_key_fingerprints": ["sha256:3f6a1c0d9e42b7a5"]
+        "allow_read_outside_workspace": false
       }
     ]
   }
 }
 ```
 
-`api_key_fingerprints` contains truncated SHA-256 fingerprints of the configured
-keys (the raw keys remain in `.security.yml`). `restrict_to_workspace` and
-`allow_read_outside_workspace` optionally override the global defaults for
-agents bound to that profile.
+`profiles` is only a name → path mapping. `restrict_to_workspace` and
+`allow_read_outside_workspace` are optional per-workspace overrides of the
+global defaults. The gateway must restart (or `gateway.hot_reload` must be
+enabled) before new or edited workspaces appear in Chat.
+
+At runtime the Web UI sends `workspace: <id>` with the message; the gateway runs
+that turn with a workspace variant of the routed agent (same model and persona,
+different directory). `pkg/isolation` child-process sandboxing is configured
+separately.
 
 Full guide: [English](docs/guides/workspace-isolation.md) · [中文](docs/guides/workspace-isolation.zh.md).
 
@@ -128,6 +126,14 @@ The launcher looks for the gateway binary (`picoclaw.exe` on Windows,
 `picoclaw` elsewhere) **in its own directory**, so keep both files together.
 On Linux/Android run `chmod +x picoclaw picoclaw-launcher` first.
 
+### Quick start
+
+1. Unzip the archive.
+2. Run `picoclaw-launcher.exe` (Windows) or `./picoclaw-launcher -no-browser` (Linux/Android).
+3. Open <http://127.0.0.1:18800>.
+4. **Models** → add a model with its API key.
+5. **Workspaces** → create a workspace, then pick it in **Chat**.
+
 ### Build from source
 
 ```bash
@@ -143,23 +149,22 @@ pnpm install --node-linker=hoisted
 pnpm exec vite build --outDir ../backend/dist --emptyOutDir
 ```
 
-Android uses `-tags stdjson` and `GOOS=android GOARCH=arm64`.
-
-For an Android app bundle, the Makefile packages the same builds as
+Android uses `-tags stdjson` and `GOOS=android GOARCH=arm64`. For an Android
+app bundle, the Makefile packages the same builds as
 `arm64-v8a/libpicoclaw.so` and `arm64-v8a/libpicoclaw-web.so`
 (`make build-android-bundle`); no special Go build mode is involved.
 
 ### Behavior notes
 
-- Workspace is resolved once per agent instance, from the API key of the
-  agent's **primary model**. Restart the gateway or enable `gateway.hot_reload`
-  after changing the layout.
-- One model entry with multiple keys is expanded into `name`,
-  `name__key_1`, … — each key can be bound separately.
-- Load-balanced aliases (several entries sharing one `model_name`) use the
-  first entry for workspace selection; bind all their keys to the same profile.
-- Session history, the session list, and the skills page follow the active
-  workspace. `pkg/isolation` child-process sandboxing is configured separately.
+- The workspace is chosen per chat turn from the Web UI selection; the agent
+  variant keeps the model/persona of the routed agent but uses the selected
+  directory for files, `exec`, sessions, skills and memory.
+- Workspace profiles are loaded at gateway startup. Restart the gateway (or
+  enable `gateway.hot_reload`) after changing them.
+- `exec` and file tools are confined according to the workspace/global
+  `restrict_to_workspace` settings; child-process sandboxing is separate.
+- A workspace starts empty: it has its own `AGENT.md`/`SOUL.md`/`skills/` only
+  if you put files there. The agent persona is inherited from the base agent.
 
 ## 📢 News
 

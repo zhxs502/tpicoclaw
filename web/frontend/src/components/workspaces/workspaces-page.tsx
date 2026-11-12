@@ -2,13 +2,12 @@ import {
   IconAlertTriangle,
   IconEdit,
   IconFolder,
-  IconKey,
   IconLoader2,
   IconPlus,
   IconShieldLock,
   IconTrash,
 } from "@tabler/icons-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 
@@ -33,20 +32,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { showSaveSuccessOrRestartToast } from "@/lib/restart-required"
 import { refreshGatewayState } from "@/store/gateway"
 
 import { ProfileDialog } from "./profile-dialog"
-
-const DEFAULT_WORKSPACE_OPTION = "__default__"
 
 function toInput(profile: WorkspaceProfile): WorkspaceProfileInput {
   return {
@@ -55,7 +45,6 @@ function toInput(profile: WorkspaceProfile): WorkspaceProfileInput {
     path: profile.path,
     restrict_to_workspace: profile.restrict_to_workspace ?? true,
     allow_read_outside_workspace: profile.allow_read_outside_workspace ?? false,
-    api_key_fingerprints: [...(profile.api_key_fingerprints ?? [])],
   }
 }
 
@@ -109,21 +98,6 @@ export function WorkspacesPage() {
     void fetchWorkspaces()
   }, [fetchWorkspaces])
 
-  const keys = data?.keys ?? []
-
-  const profileForFingerprint = useCallback(
-    (fingerprint: string) =>
-      profiles.find((profile) =>
-        profile.api_key_fingerprints.includes(fingerprint),
-      )?.id ?? "",
-    [profiles],
-  )
-
-  const profileName = useCallback(
-    (id: string) => profiles.find((profile) => profile.id === id)?.name || id,
-    [profiles],
-  )
-
   const persist = useCallback(
     (
       nextEnabled: boolean,
@@ -169,36 +143,16 @@ export function WorkspacesPage() {
     [applyResponse, syncGatewayState, t],
   )
 
-  const handleBindingChange = (fingerprint: string, value: string) => {
-    const target = value === DEFAULT_WORKSPACE_OPTION ? "" : value
-    const nextProfiles = profiles.map((profile) => {
-      const withoutFingerprint = profile.api_key_fingerprints.filter(
-        (item) => item !== fingerprint,
-      )
-      if (profile.id !== target) {
-        return { ...profile, api_key_fingerprints: withoutFingerprint }
-      }
-      return {
-        ...profile,
-        api_key_fingerprints: [...withoutFingerprint, fingerprint],
-      }
-    })
-    // Assigning a key to a workspace implies that isolation is wanted.
-    const nextEnabled = target ? true : enabled
-    setProfiles(nextProfiles)
-    setEnabled(nextEnabled)
+  const handleToggle = (value: boolean) => {
+    setEnabled(value)
     setDirty(true)
-    void persist(nextEnabled, nextProfiles)
+    void persist(value, profiles)
   }
 
   const handleSubmitProfile = (profile: WorkspaceProfileInput) => {
     const exists = profiles.some((item) => item.id === profile.id)
     const nextProfiles = exists
-      ? profiles.map((item) =>
-          item.id === profile.id
-            ? { ...profile, api_key_fingerprints: item.api_key_fingerprints }
-            : item,
-        )
+      ? profiles.map((item) => (item.id === profile.id ? profile : item))
       : [...profiles, profile]
     const nextEnabled = exists ? enabled : true
     setProfiles(nextProfiles)
@@ -241,12 +195,6 @@ export function WorkspacesPage() {
     }
   }
 
-  const warnings = useMemo(() => data?.warnings ?? [], [data])
-  const defaultKey = keys.find((key) => key.is_default_model)
-  const defaultKeyUnbound = Boolean(
-    enabled && defaultKey && !profileForFingerprint(defaultKey.fingerprint),
-  )
-
   return (
     <div className="flex h-full flex-col">
       <PageHeader title={t("navigation.workspaces")}>
@@ -258,7 +206,7 @@ export function WorkspacesPage() {
           )}
           <Button
             size="sm"
-            onClick={() => void handleSave()}
+            onClick={handleSave}
             disabled={!dirty || saving || loading}
           >
             {saving && <IconLoader2 className="size-4 animate-spin" />}
@@ -268,13 +216,15 @@ export function WorkspacesPage() {
       </PageHeader>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-10 sm:px-6">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 pt-2">
-          <p className="text-muted-foreground text-sm">
-            {t("workspaces.description")}
-          </p>
-          <p className="text-muted-foreground/80 -mt-3 text-xs">
-            {t("workspaces.applyHint")}
-          </p>
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 pt-2">
+          <div>
+            <p className="text-muted-foreground text-sm">
+              {t("workspaces.description")}
+            </p>
+            <p className="text-muted-foreground/80 mt-1 text-xs">
+              {t("workspaces.applyHint")}
+            </p>
+          </div>
 
           {loading && (
             <div className="flex items-center justify-center py-20">
@@ -334,69 +284,16 @@ export function WorkspacesPage() {
                       </p>
                     )}
                   </div>
-                  <Switch
-                    checked={enabled}
-                    onCheckedChange={(value) => {
-                      setEnabled(value)
-                      setDirty(true)
-                      void persist(value, profiles)
-                    }}
-                  />
+                  <Switch checked={enabled} onCheckedChange={handleToggle} />
                 </div>
-
-                <div className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
-                  <div className="bg-muted/40 rounded-lg p-3">
-                    <p className="text-muted-foreground">
-                      {t("workspaces.defaultWorkspace")}
-                    </p>
-                    <p className="mt-1 font-mono break-all">
-                      {data.default_workspace}
-                    </p>
-                  </div>
-                  <div className="bg-muted/40 rounded-lg p-3">
-                    <p className="text-muted-foreground">
-                      {t("workspaces.activeWorkspace")}
-                    </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                      <span className="font-mono break-all">
-                        {data.active_workspace}
-                      </span>
-                      {data.active_profile_id && (
-                        <Badge variant="secondary">
-                          {profileName(data.active_profile_id)}
-                        </Badge>
-                      )}
-                    </div>
-                    {data.default_model && (
-                      <p className="text-muted-foreground mt-1">
-                        {t("workspaces.activeModel", {
-                          model: data.default_model,
-                        })}
-                      </p>
-                    )}
-                    {defaultKeyUnbound && (
-                      <p className="mt-1 text-amber-600 dark:text-amber-400">
-                        {t("workspaces.activeUnbound", {
-                          model: data.default_model,
-                        })}
-                      </p>
-                    )}
-                  </div>
+                <div className="bg-muted/40 mt-4 rounded-lg p-3 text-xs">
+                  <p className="text-muted-foreground">
+                    {t("workspaces.defaultWorkspace")}
+                  </p>
+                  <p className="mt-1 font-mono break-all">
+                    {data.default_workspace}
+                  </p>
                 </div>
-
-                {warnings.length > 0 && (
-                  <div className="mt-3 flex flex-col gap-1">
-                    {warnings.map((warning) => (
-                      <p
-                        key={warning}
-                        className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400"
-                      >
-                        <IconAlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                        {warning}
-                      </p>
-                    ))}
-                  </div>
-                )}
               </section>
 
               <section>
@@ -474,12 +371,6 @@ export function WorkspacesPage() {
                         </p>
 
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <Badge variant="secondary">
-                            <IconKey className="size-3" />
-                            {t("workspaces.profiles.keyCount", {
-                              count: profile.api_key_fingerprints.length,
-                            })}
-                          </Badge>
                           <Badge
                             variant="outline"
                             className={
@@ -505,187 +396,6 @@ export function WorkspacesPage() {
                     ))}
                   </div>
                 )}
-              </section>
-
-              <section>
-                <h3 className="text-sm font-semibold">
-                  {t("workspaces.keys.title")}
-                </h3>
-                <p className="text-muted-foreground mt-1 text-sm">
-                  {t("workspaces.keys.description")}
-                </p>
-
-                {keys.length === 0 ? (
-                  <div className="text-muted-foreground mt-3 rounded-xl border border-dashed p-6 text-center text-sm">
-                    {t("workspaces.keys.empty")}
-                  </div>
-                ) : (
-                  <div className="mt-3 overflow-x-auto rounded-xl border">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-muted/40 text-muted-foreground text-xs">
-                        <tr>
-                          <th className="px-4 py-2.5 font-medium">
-                            {t("workspaces.keys.model")}
-                          </th>
-                          <th className="px-4 py-2.5 font-medium">
-                            {t("workspaces.keys.apiKey")}
-                          </th>
-                          <th className="px-4 py-2.5 font-medium">
-                            {t("workspaces.keys.workspace")}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {keys.map((key) => {
-                          const boundProfile = profileForFingerprint(
-                            key.fingerprint,
-                          )
-                          return (
-                            <tr
-                              key={key.fingerprint}
-                              className="border-t align-top"
-                            >
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium">
-                                    {key.model_name}
-                                  </span>
-                                  {key.is_default_model && (
-                                    <Badge variant="secondary">
-                                      {t("workspaces.keys.defaultModel")}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="text-muted-foreground mt-0.5 font-mono text-[11px]">
-                                  {key.provider}/{key.model}
-                                  {key.key_index > 0
-                                    ? ` · #${key.key_index + 1}`
-                                    : ""}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-1.5 font-mono text-xs">
-                                  <IconKey className="text-muted-foreground size-3.5" />
-                                  {key.key_mask}
-                                </div>
-                                <div className="text-muted-foreground mt-0.5 font-mono text-[10px]">
-                                  {key.fingerprint}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3">
-                                <Select
-                                  value={
-                                    boundProfile || DEFAULT_WORKSPACE_OPTION
-                                  }
-                                  onValueChange={(value) =>
-                                    handleBindingChange(key.fingerprint, value)
-                                  }
-                                >
-                                  <SelectTrigger
-                                    className="h-8 w-[220px]"
-                                    aria-label={t("workspaces.keys.workspace")}
-                                  >
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem
-                                      value={DEFAULT_WORKSPACE_OPTION}
-                                    >
-                                      {t("workspaces.keys.useDefault")}
-                                    </SelectItem>
-                                    {profiles.map((profile) => (
-                                      <SelectItem
-                                        key={profile.id}
-                                        value={profile.id}
-                                      >
-                                        {profile.name || profile.id}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <p className="text-muted-foreground mt-1 max-w-[260px] font-mono text-[10px] break-all">
-                                  {boundProfile
-                                    ? (profiles.find(
-                                        (profile) =>
-                                          profile.id === boundProfile,
-                                      )?.path ?? "")
-                                    : data.default_workspace}
-                                </p>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
-
-              <section>
-                <h3 className="text-sm font-semibold">
-                  {t("workspaces.agents.title")}
-                </h3>
-                <p className="text-muted-foreground mt-1 text-sm">
-                  {t("workspaces.agents.description")}
-                </p>
-                <div className="mt-3 overflow-x-auto rounded-xl border">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-muted/40 text-muted-foreground text-xs">
-                      <tr>
-                        <th className="px-4 py-2.5 font-medium">
-                          {t("workspaces.agents.agent")}
-                        </th>
-                        <th className="px-4 py-2.5 font-medium">
-                          {t("workspaces.agents.model")}
-                        </th>
-                        <th className="px-4 py-2.5 font-medium">
-                          {t("workspaces.agents.workspace")}
-                        </th>
-                        <th className="px-4 py-2.5 font-medium">
-                          {t("workspaces.agents.binding")}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(data.agents ?? []).map((agent) => (
-                        <tr key={agent.id} className="border-t align-top">
-                          <td className="px-4 py-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-medium">{agent.id}</span>
-                              {agent.name && (
-                                <span className="text-muted-foreground text-xs">
-                                  {agent.name}
-                                </span>
-                              )}
-                              {agent.is_default && (
-                                <Badge variant="secondary">
-                                  {t("workspaces.agents.default")}
-                                </Badge>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 font-mono text-xs">
-                            {agent.model}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-xs break-all">
-                            {agent.workspace}
-                          </td>
-                          <td className="px-4 py-3">
-                            {agent.profile_id ? (
-                              <Badge variant="secondary">
-                                {profileName(agent.profile_id)}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">
-                                {t("workspaces.agents.unbound")}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               </section>
             </>
           )}

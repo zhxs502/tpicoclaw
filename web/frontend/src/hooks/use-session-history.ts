@@ -7,11 +7,13 @@ const LIMIT = 20
 
 interface UseSessionHistoryOptions {
   activeSessionId: string
+  workspace?: string
   onDeletedActiveSession: () => void
 }
 
 export function useSessionHistory({
   activeSessionId,
+  workspace = "",
   onDeletedActiveSession,
 }: UseSessionHistoryOptions) {
   const { t } = useTranslation()
@@ -32,7 +34,7 @@ export function useSessionHistory({
           setOffset(0)
         }
 
-        const data = await getSessions(currentOffset, LIMIT)
+        const data = await getSessions(currentOffset, LIMIT, workspace)
         setLoadError(false)
 
         if (data.length < LIMIT) {
@@ -60,7 +62,7 @@ export function useSessionHistory({
         setIsLoadingMore(false)
       }
     },
-    [offset],
+    [offset, workspace],
   )
 
   useEffect(() => {
@@ -91,7 +93,7 @@ export function useSessionHistory({
         const deletedLoadedSession = sessions.some(
           (session) => session.id === id,
         )
-        await deleteSession(id)
+        await deleteSession(id, workspace)
         setSessions((prev) => prev.filter((s) => s.id !== id))
         if (deletedLoadedSession) {
           setOffset((prev) => Math.max(prev - 1, 0))
@@ -103,7 +105,7 @@ export function useSessionHistory({
         console.error("Failed to delete session:", err)
       }
     },
-    [activeSessionId, onDeletedActiveSession, sessions],
+    [activeSessionId, onDeletedActiveSession, sessions, workspace],
   )
 
   return {

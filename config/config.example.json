@@ -22,7 +22,7 @@
     }
   },
   "workspace_isolation": {
-    "_comment": "Bind model API keys to isolated workspace directories. Configure it in the Web UI (Workspaces) or see docs/guides/workspace-isolation.md.",
+    "_comment": "Named workspace directories (name -> path). Pick one next to the chat model selector in the Web UI; see docs/guides/workspace-isolation.md.",
     "enabled": false,
     "profiles": []
   },

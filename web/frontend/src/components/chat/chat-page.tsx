@@ -1,16 +1,17 @@
 import { IconPlus } from "@tabler/icons-react"
 import { useAtom } from "jotai"
 import {
-  memo,
   type ChangeEvent,
   type ClipboardEvent,
   type DragEvent,
+  memo,
   useEffect,
   useRef,
   useState,
 } from "react"
 import { useTranslation } from "react-i18next"
 
+import { type WorkspaceProfile, getWorkspaces } from "@/api/workspaces"
 import { AssistantMessage } from "@/components/chat/assistant-message"
 import {
   ChatComposer,
@@ -21,6 +22,7 @@ import { ModelSelector } from "@/components/chat/model-selector"
 import { SessionHistoryMenu } from "@/components/chat/session-history-menu"
 import { TypingIndicator } from "@/components/chat/typing-indicator"
 import { UserMessage } from "@/components/chat/user-message"
+import { WorkspaceSelector } from "@/components/chat/workspace-selector"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -30,6 +32,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  getActiveWorkspace,
+  setActiveWorkspace,
+} from "@/features/chat/controller"
 import {
   CHAT_IMAGE_ACCEPT,
   buildChatImageAttachments,
@@ -130,9 +136,7 @@ const MessageList = memo(function MessageList({
       )}
 
       {messages.map((msg) => {
-        if (
-          !shouldShowAssistantMessage(assistantDetailVisibility, msg.kind)
-        ) {
+        if (!shouldShowAssistantMessage(assistantDetailVisibility, msg.kind)) {
           return null
         }
 
@@ -201,8 +205,35 @@ export function ChatPage() {
     newChat,
   } = usePicoChat()
 
-  const { state: gwState } = useGateway()
+  const { state: gwState, restartRequired: gatewayRestartRequired } =
+    useGateway()
   const isGatewayRunning = gwState === "running"
+
+  const [workspaces, setWorkspaces] = useState<WorkspaceProfile[]>([])
+  const [workspaceId, setWorkspaceId] = useState(getActiveWorkspace)
+
+  useEffect(() => {
+    if (!isGatewayRunning) return
+    let cancelled = false
+    void getWorkspaces()
+      .then((data) => {
+        if (cancelled) return
+        setWorkspaces(data.enabled ? data.profiles : [])
+      })
+      .catch(() => {
+        if (!cancelled) setWorkspaces([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isGatewayRunning])
+
+  useEffect(() => {
+    if (!workspaceId) return
+    if (workspaces.some((workspace) => workspace.id === workspaceId)) return
+    setWorkspaceId("")
+    setActiveWorkspace("")
+  }, [workspaceId, workspaces])
 
   const {
     defaultModelName,
@@ -231,6 +262,7 @@ export function ChatPage() {
     handleDeleteSession,
   } = useSessionHistory({
     activeSessionId,
+    workspace: workspaceId,
     onDeletedActiveSession: newChat,
   })
 
@@ -264,6 +296,14 @@ export function ChatPage() {
       setInput("")
       setAttachments([])
     }
+  }
+
+  const handleWorkspaceChange = (nextWorkspaceId: string) => {
+    if (nextWorkspaceId === workspaceId) return
+    setWorkspaceId(nextWorkspaceId)
+    setActiveWorkspace(nextWorkspaceId)
+    // Workspace changes start a fresh session so history stays per workspace.
+    void newChat()
   }
 
   const handleAddImages = () => {
@@ -381,14 +421,24 @@ export function ChatPage() {
         }`}
         titleExtra={
           hasAvailableModels && (
-            <ModelSelector
-              defaultModelName={defaultModelName}
-              apiKeyModels={apiKeyModels}
-              oauthModels={oauthModels}
-              localModels={localModels}
-              disabled={settingDefault}
-              onValueChange={handleSetDefault}
-            />
+            <div className="flex items-center gap-1">
+              <ModelSelector
+                defaultModelName={defaultModelName}
+                apiKeyModels={apiKeyModels}
+                oauthModels={oauthModels}
+                localModels={localModels}
+                disabled={settingDefault}
+                onValueChange={handleSetDefault}
+              />
+              {workspaces.length > 0 && (
+                <WorkspaceSelector
+                  value={workspaceId}
+                  workspaces={workspaces}
+                  disabled={settingDefault || gatewayRestartRequired}
+                  onValueChange={handleWorkspaceChange}
+                />
+              )}
+            </div>
           )
         }
       >

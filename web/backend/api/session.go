@@ -775,25 +775,25 @@ func parseMessageToolContent(argsJSON string) (string, bool) {
 	return args.Content, true
 }
 
-// sessionsDir resolves the path to the gateway's session storage directory.
-// It follows the effective workspace for the default chat model, so an
-// isolated workspace bound to the model's API key is used when configured.
-func (h *Handler) sessionsDir() (string, error) {
+// sessionsDir resolves the path to the session storage directory for a
+// workspace selection. An empty or unknown workspace id uses the default
+// workspace.
+func (h *Handler) sessionsDir(workspaceID string) (string, error) {
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
 		return "", err
 	}
 
-	return resolveSessionsDir(effectiveWorkspacePath(cfg)), nil
+	return workspaceSessionsDir(cfg, workspaceID), nil
 }
 
-func (h *Handler) sessionRuntimeSettings() (string, int, error) {
+func (h *Handler) sessionRuntimeSettings(workspaceID string) (string, int, error) {
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
 		return "", 0, err
 	}
 
-	return resolveSessionsDir(effectiveWorkspacePath(cfg)), cfg.Agents.Defaults.GetToolFeedbackMaxArgsLength(), nil
+	return workspaceSessionsDir(cfg, workspaceID), cfg.Agents.Defaults.GetToolFeedbackMaxArgsLength(), nil
 }
 
 func resolveSessionsDir(workspace string) string {
@@ -819,7 +819,7 @@ func resolveSessionsDir(workspace string) string {
 //
 //	GET /api/sessions
 func (h *Handler) handleListSessions(w http.ResponseWriter, r *http.Request) {
-	dir, toolFeedbackMaxArgsLength, err := h.sessionRuntimeSettings()
+	dir, toolFeedbackMaxArgsLength, err := h.sessionRuntimeSettings(r.URL.Query().Get("workspace"))
 	if err != nil {
 		http.Error(w, "failed to resolve sessions directory", http.StatusInternalServerError)
 		return
@@ -905,7 +905,7 @@ func (h *Handler) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dir, toolFeedbackMaxArgsLength, err := h.sessionRuntimeSettings()
+	dir, toolFeedbackMaxArgsLength, err := h.sessionRuntimeSettings(r.URL.Query().Get("workspace"))
 	if err != nil {
 		http.Error(w, "failed to resolve sessions directory", http.StatusInternalServerError)
 		return
@@ -966,7 +966,7 @@ func (h *Handler) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dir, err := h.sessionsDir()
+	dir, err := h.sessionsDir(r.URL.Query().Get("workspace"))
 	if err != nil {
 		http.Error(w, "failed to resolve sessions directory", http.StatusInternalServerError)
 		return

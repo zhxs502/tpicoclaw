@@ -41,34 +41,52 @@ export interface SessionDetail {
   updated: string
 }
 
+function workspaceQuery(workspace?: string): string {
+  return workspace ? `&workspace=${encodeURIComponent(workspace)}` : ""
+}
+
 export async function getSessions(
   offset: number = 0,
   limit: number = 20,
+  workspace?: string,
 ): Promise<SessionSummary[]> {
   const params = new URLSearchParams({
     offset: offset.toString(),
     limit: limit.toString(),
   })
 
-  const res = await launcherFetch(`/api/sessions?${params.toString()}`)
+  const res = await launcherFetch(
+    `/api/sessions?${params.toString()}${workspaceQuery(workspace)}`,
+  )
   if (!res.ok) {
     throw new Error(`Failed to fetch sessions: ${res.status}`)
   }
   return res.json()
 }
 
-export async function getSessionHistory(id: string): Promise<SessionDetail> {
-  const res = await launcherFetch(`/api/sessions/${encodeURIComponent(id)}`)
+export async function getSessionHistory(
+  id: string,
+  workspace?: string,
+): Promise<SessionDetail> {
+  const res = await launcherFetch(
+    `/api/sessions/${encodeURIComponent(id)}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ""}`,
+  )
   if (!res.ok) {
     throw new Error(`Failed to fetch session ${id}: ${res.status}`)
   }
   return res.json()
 }
 
-export async function deleteSession(id: string): Promise<void> {
-  const res = await launcherFetch(`/api/sessions/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  })
+export async function deleteSession(
+  id: string,
+  workspace?: string,
+): Promise<void> {
+  const res = await launcherFetch(
+    `/api/sessions/${encodeURIComponent(id)}${workspace ? `?workspace=${encodeURIComponent(workspace)}` : ""}`,
+    {
+      method: "DELETE",
+    },
+  )
   if (!res.ok) {
     throw new Error(`Failed to delete session ${id}: ${res.status}`)
   }

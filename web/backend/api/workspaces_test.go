@@ -49,40 +49,23 @@ func putWorkspaces(t *testing.T, mux *http.ServeMux, payload workspacesPayload) 
 	return rec
 }
 
-func TestHandleGetWorkspaces_ListsKeysWithoutLeakingSecrets(t *testing.T) {
+func TestHandleGetWorkspaces_EmptyProfiles(t *testing.T) {
 	_, mux, cleanup := newWorkspacesTestServer(t)
 	defer cleanup()
 
 	resp := getWorkspacesResponse(t, mux)
-	if resp.DefaultModel != "custom-default" {
-		t.Fatalf("default model = %q, want custom-default", resp.DefaultModel)
+	if resp.Enabled {
+		t.Fatal("isolation should be disabled without profiles")
 	}
-	if len(resp.Keys) != 1 {
-		t.Fatalf("keys = %#v, want one entry", resp.Keys)
+	if len(resp.Profiles) != 0 {
+		t.Fatalf("profiles = %#v, want empty", resp.Profiles)
 	}
-	key := resp.Keys[0]
-	wantFingerprint := config.APIKeyFingerprint("sk-default")
-	if key.Fingerprint != wantFingerprint {
-		t.Fatalf("fingerprint = %q, want %q", key.Fingerprint, wantFingerprint)
-	}
-	if key.ProfileID != "" {
-		t.Fatalf("profile id = %q, want empty", key.ProfileID)
-	}
-	if key.KeyMask == "sk-default" || !strings.Contains(key.KeyMask, "****") {
-		t.Fatalf("key mask %q should hide the secret", key.KeyMask)
-	}
-	if resp.ActiveWorkspace != resp.DefaultWorkspace {
-		t.Fatalf("active workspace = %q, want default %q", resp.ActiveWorkspace, resp.DefaultWorkspace)
-	}
-	if len(resp.Agents) != 1 || resp.Agents[0].ID != "main" {
-		t.Fatalf("agents = %#v, want implicit main agent", resp.Agents)
-	}
-	if resp.Agents[0].ProfileID != "" {
-		t.Fatalf("agent profile = %q, want empty before binding", resp.Agents[0].ProfileID)
+	if resp.DefaultWorkspace == "" {
+		t.Fatal("default workspace should be resolved")
 	}
 }
 
-func TestHandleUpdateWorkspaces_BindsKeyToIsolatedWorkspace(t *testing.T) {
+func TestHandleUpdateWorkspaces_SavesNamePathMapping(t *testing.T) {
 	configPath, mux, cleanup := newWorkspacesTestServer(t)
 	defer cleanup()
 
@@ -97,7 +80,6 @@ func TestHandleUpdateWorkspaces_BindsKeyToIsolatedWorkspace(t *testing.T) {
 				Name:                "Team A",
 				Path:                isolated,
 				RestrictToWorkspace: &restrict,
-				APIKeyFingerprints:  []string{config.APIKeyFingerprint("sk-default")},
 			},
 		},
 	}
@@ -113,54 +95,17 @@ func TestHandleUpdateWorkspaces_BindsKeyToIsolatedWorkspace(t *testing.T) {
 	if cfg.WorkspaceIsolation == nil || len(cfg.WorkspaceIsolation.Profiles) != 1 {
 		t.Fatalf("workspace isolation = %#v", cfg.WorkspaceIsolation)
 	}
-	if got := cfg.WorkspaceIsolation.Profiles[0].Path; got != isolated {
-		t.Fatalf("saved path = %q, want %q", got, isolated)
+	profile := cfg.WorkspaceIsolation.Profiles[0]
+	if profile.Path != isolated || profile.Name != "Team A" {
+		t.Fatalf("saved profile = %#v", profile)
 	}
 
 	resp := getWorkspacesResponse(t, mux)
-	if len(resp.Keys) != 1 || resp.Keys[0].ProfileID != "team-a" {
-		t.Fatalf("keys = %#v, want key bound to team-a", resp.Keys)
+	if !resp.Enabled || len(resp.Profiles) != 1 || resp.Profiles[0].ID != "team-a" {
+		t.Fatalf("response = %#v", resp)
 	}
-	if resp.ActiveWorkspace != isolated {
-		t.Fatalf("active workspace = %q, want %q", resp.ActiveWorkspace, isolated)
-	}
-	if resp.ActiveProfileID != "team-a" {
-		t.Fatalf("active profile = %q, want team-a", resp.ActiveProfileID)
-	}
-	if len(resp.Agents) != 1 || resp.Agents[0].ProfileID != "team-a" || resp.Agents[0].Workspace != isolated {
-		t.Fatalf("agents = %#v, want main bound to team-a %q", resp.Agents, isolated)
-	}
-}
-
-func TestHandleUpdateWorkspaces_PrunesUnknownFingerprints(t *testing.T) {
-	configPath, mux, cleanup := newWorkspacesTestServer(t)
-	defer cleanup()
-
-	enabled := true
-	payload := workspacesPayload{
-		Enabled: &enabled,
-		Profiles: []workspaceProfilePayload{
-			{
-				ID:                 "stale",
-				Path:               filepath.Join(t.TempDir(), "stale"),
-				APIKeyFingerprints: []string{config.APIKeyFingerprint("sk-gone")},
-			},
-		},
-	}
-	rec := putWorkspaces(t, mux, payload)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("PUT status = %d, body=%s", rec.Code, rec.Body.String())
-	}
-
-	cfg, err := config.LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if cfg.WorkspaceIsolation == nil || len(cfg.WorkspaceIsolation.Profiles) != 1 {
-		t.Fatalf("workspace isolation = %#v", cfg.WorkspaceIsolation)
-	}
-	if got := len(cfg.WorkspaceIsolation.Profiles[0].APIKeyFingerprints); got != 0 {
-		t.Fatalf("fingerprints = %d, want 0 after prune", got)
+	if resp.Profiles[0].Path != isolated {
+		t.Fatalf("profile path = %q, want %q", resp.Profiles[0].Path, isolated)
 	}
 }
 

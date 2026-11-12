@@ -53,6 +53,8 @@
       "noDefaultModel": "无法对话：尚未设置默认模型。请前往模型页面设置默认模型。"
     },
     "newChat": "新建对话",
+    "workspace": "工作区",
+    "workspaceDefault": "默认工作区",
     "notConnected": "服务未运行，请先启动以进行对话。",
     "thinking": {
       "step1": "思考中...",
@@ -169,35 +171,32 @@
     "version_unknown": "未知"
   },
   "workspaces": {
-    "description": "把 API Key 绑定到独立的工作区目录。使用已绑定 Key 的智能体，其文件读写、命令执行与会话记录都落在该目录内。",
+    "description": "配置 名称 → 路径 的工作区映射。在对话页模型选择器旁选一个，同一个模型就能用不同目录。",
     "loadError": "加载工作区设置失败",
     "retry": "重试",
     "unsaved": "未保存",
-    "saved": "工作区隔离配置已保存。",
+    "saved": "工作区配置已保存。",
     "saveError": "保存工作区设置失败",
     "applyHint": "改动会自动保存；保存后需要重启服务才会生效（网关开启 hot_reload 时除外）。",
-    "disabledHint": "工作区隔离已关闭，下面的绑定不会生效。",
-    "activeUnbound": "当前对话模型（{{model}}）的 API Key 还没绑定工作区，聊天仍使用默认工作区。",
+    "disabledHint": "工作区选择已关闭，对话页不会显示工作区选择器。",
     "restartPending": "运行中的网关仍在使用旧配置，重启后才会应用新的工作区布局。",
     "restartNow": "重启服务",
     "restartDone": "服务已重启。",
     "restartError": "重启服务失败",
     "enable": {
-      "title": "启用工作区隔离",
-      "description": "启用后，智能体按模型 API Key 选择工作区；未绑定的 Key 继续使用默认工作区。"
+      "title": "启用工作区选择",
+      "description": "启用后，对话页顶部会在模型选择器旁显示工作区选择器；不选时使用默认工作区。"
     },
     "defaultWorkspace": "默认工作区",
-    "activeWorkspace": "当前工作区",
-    "activeModel": "当前对话模型：{{model}}",
     "profiles": {
-      "title": "隔离工作区",
-      "description": "每个工作区是一个独立目录，拥有自己的文件、会话与技能。",
+      "title": "工作区",
+      "description": "每个工作区是一个目录；选择它的对话，其会话、文件与技能都保存在那里。",
       "add": "新建工作区",
-      "empty": "还没有隔离工作区。先新建一个，再把 API Key 绑过去。",
+      "empty": "还没有工作区。先建一个 名称 → 路径 映射。",
       "edit": "编辑工作区",
       "delete": "删除工作区",
       "deleteTitle": "删除工作区？",
-      "deleteDescription": "将删除「{{name}}」。绑定到该工作区的 API Key 会回落到默认工作区。",
+      "deleteDescription": "将删除「{{name}}」。使用它的对话会回落到默认工作区。",
       "keyCount": "{{count}} 个密钥",
       "restricted": "限制在本目录",
       "unrestricted": "可离开本目录",
@@ -224,9 +223,9 @@
       "unbound": "默认工作区"
     },
     "dialog": {
-      "addTitle": "新建隔离工作区",
-      "editTitle": "编辑隔离工作区",
-      "description": "目录会自动创建。保存工作区后再为其分配 API Key。",
+      "addTitle": "新建工作区",
+      "editTitle": "编辑工作区",
+      "description": "目录会自动创建；重启服务后它会出现在对话页的工作区选择器里。",
       "name": "名称",
       "namePlaceholder": "例如：Team A",
       "path": "工作区路径",

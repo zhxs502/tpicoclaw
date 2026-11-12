@@ -327,7 +327,7 @@ func (h *Handler) handleInstallSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workspace := effectiveWorkspacePath(cfg)
+	workspace := cfg.DefaultWorkspacePath()
 	skillsRoot := filepath.Join(workspace, "skills")
 	targetDir := filepath.Join(workspace, "skills", dirName)
 	workspaceSkillWriteMu.Lock()
@@ -488,7 +488,7 @@ func (h *Handler) handleDeleteSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loader := newSkillsLoader(effectiveWorkspacePath(cfg))
+	loader := newSkillsLoader(cfg.DefaultWorkspacePath())
 	name := r.PathValue("name")
 	workspaceSkillWriteMu.Lock()
 	defer workspaceSkillWriteMu.Unlock()
@@ -541,7 +541,7 @@ func ensureSkillRegistryToolEnabled(cfg *config.Config, toolName string) error {
 }
 
 func buildSkillSupportItems(cfg *config.Config) ([]skillSupportItem, error) {
-	rawSkills := newSkillsLoader(effectiveWorkspacePath(cfg)).ListSkills()
+	rawSkills := newSkillsLoader(cfg.DefaultWorkspacePath()).ListSkills()
 	items := make([]skillSupportItem, 0, len(rawSkills))
 	for _, skill := range rawSkills {
 		item, err := enrichSkillInfo(cfg, skill)
@@ -853,7 +853,7 @@ func importUploadedMarkdownSkill(cfg *config.Config, filename string, content []
 	}
 
 	normalizedContent := normalizeImportedSkillContent(content, skillName)
-	workspace := effectiveWorkspacePath(cfg)
+	workspace := cfg.DefaultWorkspacePath()
 	skillDir := filepath.Join(workspace, "skills", skillName)
 	skillFile := filepath.Join(skillDir, "SKILL.md")
 
@@ -908,7 +908,7 @@ func importUploadedSkillArchive(cfg *config.Config, filename string, content []b
 		return nil, http.StatusBadRequest, err
 	}
 
-	workspace := effectiveWorkspacePath(cfg)
+	workspace := cfg.DefaultWorkspacePath()
 	skillDir := filepath.Join(workspace, "skills", skillName)
 	if err := ensureWorkspaceSkillDoesNotExist(skillDir); err != nil {
 		return nil, statusCodeForImportedSkillWriteError(err), err

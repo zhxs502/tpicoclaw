@@ -1,8 +1,6 @@
 package config
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,81 +11,39 @@ import (
 	"github.com/sipeed/picoclaw/pkg"
 )
 
-// WorkspaceIsolationConfig binds API keys to isolated workspace directories.
-//
-// Every configured model entry may carry one or more API keys. When isolation
-// is enabled, an agent whose primary model uses a key that belongs to a
-// workspace profile runs with that profile's path as its workspace (and,
-// optionally, with its own sandbox restriction settings). Keys that are not
-// bound to any profile keep using agents.defaults.workspace.
+// WorkspaceIsolationConfig defines named workspace directories that can be
+// selected per chat. Profiles are a simple name -> path mapping; the Web UI
+// lets the user pick one next to the chat model selector.
 type WorkspaceIsolationConfig struct {
-	// Enabled switches isolation on. When nil, isolation is enabled as soon as
-	// at least one profile is configured.
+	// Enabled switches workspace selection on. When nil, it is enabled as soon
+	// as at least one profile is configured.
 	Enabled  *bool                    `json:"enabled,omitempty"`
 	Profiles []WorkspaceProfileConfig `json:"profiles,omitempty"`
 }
 
-// WorkspaceProfileConfig is one isolated workspace.
+// WorkspaceProfileConfig is one named workspace.
 type WorkspaceProfileConfig struct {
-	// ID is a stable identifier used by the Web UI and the bindings. It must
-	// match [A-Za-z0-9][A-Za-z0-9_-]{0,63}.
+	// ID is a stable identifier used by the Web UI and the chat selector. It
+	// must match [A-Za-z0-9][A-Za-z0-9_-]{0,63}.
 	ID string `json:"id"`
 	// Name is the human readable label shown in the Web UI.
 	Name string `json:"name,omitempty"`
 	// Path is the workspace directory. It may start with "~".
 	Path string `json:"path"`
 	// RestrictToWorkspace optionally overrides
-	// agents.defaults.restrict_to_workspace for agents bound to this profile.
+	// agents.defaults.restrict_to_workspace for chats using this workspace.
 	RestrictToWorkspace *bool `json:"restrict_to_workspace,omitempty"`
 	// AllowReadOutsideWorkspace optionally overrides
-	// agents.defaults.allow_read_outside_workspace for bound agents.
+	// agents.defaults.allow_read_outside_workspace for this workspace.
 	AllowReadOutsideWorkspace *bool `json:"allow_read_outside_workspace,omitempty"`
-	// APIKeyFingerprints lists the API keys routed to this workspace. Values
-	// are produced by APIKeyFingerprint; the keys themselves are never stored
-	// here.
-	APIKeyFingerprints []string `json:"api_key_fingerprints,omitempty"`
 }
 
 const (
-	apiKeyFingerprintPrefix = "sha256:"
-	// MaxWorkspaceProfiles caps the number of isolated workspaces in one config.
+	// MaxWorkspaceProfiles caps the number of workspaces in one config.
 	MaxWorkspaceProfiles = 64
 )
 
 var workspaceProfileIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
-
-// APIKeyFingerprint returns a stable, non-reversible identifier for an API key.
-//
-// The fingerprint is a truncated SHA-256 of the resolved key value, which makes
-// it stable across encrypted (enc://) and file (file://) references. An empty
-// key produces an empty fingerprint and therefore never matches a profile.
-func APIKeyFingerprint(key string) string {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return ""
-	}
-	sum := sha256.Sum256([]byte(key))
-	return apiKeyFingerprintPrefix + hex.EncodeToString(sum[:8])
-}
-
-// IsAPIKeyFingerprint reports whether value looks like a fingerprint produced
-// by APIKeyFingerprint.
-func IsAPIKeyFingerprint(value string) bool {
-	value = strings.TrimSpace(value)
-	if !strings.HasPrefix(value, apiKeyFingerprintPrefix) {
-		return false
-	}
-	digest := strings.TrimPrefix(value, apiKeyFingerprintPrefix)
-	if len(digest) != 16 {
-		return false
-	}
-	for _, r := range digest {
-		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
-			return false
-		}
-	}
-	return true
-}
 
 // ExpandWorkspacePath expands a leading "~" and cleans the path. Both "/" and
 // "\" are accepted after the home shorthand.
@@ -113,7 +69,7 @@ func ExpandWorkspacePath(path string) string {
 	return filepath.Clean(path)
 }
 
-// IsEnabled reports whether workspace isolation should be applied.
+// IsEnabled reports whether workspace selection should be applied.
 func (w *WorkspaceIsolationConfig) IsEnabled() bool {
 	if w == nil {
 		return false
@@ -124,7 +80,7 @@ func (w *WorkspaceIsolationConfig) IsEnabled() bool {
 	return len(w.Profiles) > 0
 }
 
-// EffectiveRestrict resolves the restrict_to_workspace value for a bound agent.
+// EffectiveRestrict resolves restrict_to_workspace for a workspace selection.
 func (p *WorkspaceProfileConfig) EffectiveRestrict(defaultValue bool) bool {
 	if p == nil || p.RestrictToWorkspace == nil {
 		return defaultValue
@@ -132,7 +88,7 @@ func (p *WorkspaceProfileConfig) EffectiveRestrict(defaultValue bool) bool {
 	return *p.RestrictToWorkspace
 }
 
-// EffectiveAllowReadOutside resolves allow_read_outside_workspace for a bound agent.
+// EffectiveAllowReadOutside resolves allow_read_outside_workspace for a workspace.
 func (p *WorkspaceProfileConfig) EffectiveAllowReadOutside(defaultValue bool) bool {
 	if p == nil || p.AllowReadOutsideWorkspace == nil {
 		return defaultValue
@@ -152,84 +108,46 @@ func (c *Config) DefaultWorkspacePath() string {
 	return path
 }
 
-// WorkspaceProfileForAPIKey returns the profile bound to key, or nil.
-func (c *Config) WorkspaceProfileForAPIKey(key string) *WorkspaceProfileConfig {
-	if c == nil || c.WorkspaceIsolation == nil || !c.WorkspaceIsolation.IsEnabled() {
+// WorkspaceProfileByID returns the profile with the given id. Lookups are
+// case-insensitive so IDs remain stable across the Web UI and config edits.
+func (c *Config) WorkspaceProfileByID(id string) *WorkspaceProfileConfig {
+	if c == nil || c.WorkspaceIsolation == nil {
 		return nil
 	}
-	fingerprint := APIKeyFingerprint(key)
-	if fingerprint == "" {
+	id = strings.TrimSpace(id)
+	if id == "" {
 		return nil
 	}
 	for i := range c.WorkspaceIsolation.Profiles {
 		profile := &c.WorkspaceIsolation.Profiles[i]
-		for _, bound := range profile.APIKeyFingerprints {
-			if strings.EqualFold(strings.TrimSpace(bound), fingerprint) {
-				return profile
-			}
+		if strings.EqualFold(profile.ID, id) {
+			return profile
 		}
 	}
 	return nil
 }
 
-// WorkspaceForModelConfig returns the workspace path and matching profile for a
-// model entry. The default workspace is returned when the model has no key, the
-// key is not bound, or isolation is disabled.
-func (c *Config) WorkspaceForModelConfig(mc *ModelConfig) (string, *WorkspaceProfileConfig) {
-	if c == nil {
-		return "", nil
-	}
-	defaultPath := c.DefaultWorkspacePath()
-	if mc == nil {
-		return defaultPath, nil
-	}
-	profile := c.WorkspaceProfileForAPIKey(mc.APIKey())
+// WorkspacePathByID returns the expanded path of a workspace profile.
+func (c *Config) WorkspacePathByID(id string) (string, *WorkspaceProfileConfig, bool) {
+	profile := c.WorkspaceProfileByID(id)
 	if profile == nil {
-		return defaultPath, nil
+		return "", nil, false
 	}
 	path := ExpandWorkspacePath(profile.Path)
 	if path == "" {
-		return defaultPath, nil
+		return "", nil, false
 	}
-	return path, profile
+	return path, profile, true
 }
 
-// PrimaryModelConfig returns the first configured entry for a model alias or
-// model reference. Unlike GetModelConfig it never round-robins, which keeps
-// workspace resolution deterministic for load-balanced aliases.
-func (c *Config) PrimaryModelConfig(modelName string) *ModelConfig {
-	if c == nil {
-		return nil
-	}
-	modelName = strings.TrimSpace(modelName)
-	if modelName == "" {
-		return nil
-	}
-	for i := range c.ModelList {
-		if c.ModelList[i] != nil && c.ModelList[i].ModelName == modelName {
-			return c.ModelList[i]
-		}
-	}
-	return nil
-}
-
-// ActiveWorkspaceForModel resolves the effective workspace for a model alias.
-func (c *Config) ActiveWorkspaceForModel(modelName string) (string, *WorkspaceProfileConfig) {
-	if c == nil {
-		return "", nil
-	}
-	return c.WorkspaceForModelConfig(c.PrimaryModelConfig(modelName))
-}
-
-// NormalizeWorkspaceIsolation fills in generated IDs, trims fields and removes
-// duplicate fingerprints in place. It returns true when anything changed.
+// NormalizeWorkspaceIsolation fills in generated IDs and trims fields in place.
+// It returns true when anything changed.
 func NormalizeWorkspaceIsolation(cfg *WorkspaceIsolationConfig) bool {
 	if cfg == nil {
 		return false
 	}
 	changed := false
 	seenIDs := make(map[string]struct{}, len(cfg.Profiles))
-	usedFingerprints := make(map[string]string, len(cfg.Profiles))
 
 	for i := range cfg.Profiles {
 		profile := &cfg.Profiles[i]
@@ -257,32 +175,11 @@ func NormalizeWorkspaceIsolation(cfg *WorkspaceIsolationConfig) bool {
 			profile.ID = fmt.Sprintf("%s-%d", baseID, suffix)
 			changed = true
 		}
-
-		fingerprints := make([]string, 0, len(profile.APIKeyFingerprints))
-		for _, fingerprint := range profile.APIKeyFingerprints {
-			fingerprint = strings.ToLower(strings.TrimSpace(fingerprint))
-			if fingerprint == "" {
-				changed = true
-				continue
-			}
-			if owner, exists := usedFingerprints[fingerprint]; exists && owner != strings.ToLower(profile.ID) {
-				// A key may only belong to one workspace; the first profile wins.
-				changed = true
-				continue
-			}
-			if containsFoldedString(fingerprints, fingerprint) {
-				changed = true
-				continue
-			}
-			usedFingerprints[fingerprint] = strings.ToLower(profile.ID)
-			fingerprints = append(fingerprints, fingerprint)
-		}
-		profile.APIKeyFingerprints = fingerprints
 	}
 	return changed
 }
 
-// Validate checks profile identifiers, paths and fingerprints.
+// Validate checks profile identifiers and paths.
 func (w *WorkspaceIsolationConfig) Validate() []string {
 	if w == nil {
 		return nil
@@ -295,7 +192,6 @@ func (w *WorkspaceIsolationConfig) Validate() []string {
 
 	ids := make(map[string]struct{}, len(w.Profiles))
 	paths := make(map[string]string, len(w.Profiles))
-	fingerprints := make(map[string]string, len(w.Profiles))
 
 	for i := range w.Profiles {
 		profile := &w.Profiles[i]
@@ -329,22 +225,6 @@ func (w *WorkspaceIsolationConfig) Validate() []string {
 					paths[key] = label
 				}
 			}
-		}
-
-		for _, fingerprint := range profile.APIKeyFingerprints {
-			fingerprint = strings.ToLower(strings.TrimSpace(fingerprint))
-			if fingerprint == "" {
-				continue
-			}
-			if !IsAPIKeyFingerprint(fingerprint) {
-				errs = append(errs, fmt.Sprintf("workspace %s: invalid api key fingerprint %q", label, fingerprint))
-				continue
-			}
-			if owner, exists := fingerprints[fingerprint]; exists && owner != label {
-				errs = append(errs, fmt.Sprintf("workspace %s: api key is already bound to workspace %s", label, owner))
-				continue
-			}
-			fingerprints[fingerprint] = label
 		}
 	}
 
@@ -420,13 +300,4 @@ func workspaceProfileSlug(name string) string {
 		}
 	}
 	return slug
-}
-
-func containsFoldedString(values []string, target string) bool {
-	for _, value := range values {
-		if strings.EqualFold(value, target) {
-			return true
-		}
-	}
-	return false
 }

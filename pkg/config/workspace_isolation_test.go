@@ -11,33 +11,6 @@ func boolValue(v bool) *bool {
 	return &v
 }
 
-func TestAPIKeyFingerprint(t *testing.T) {
-	if got := APIKeyFingerprint(""); got != "" {
-		t.Fatalf("APIKeyFingerprint(\"\") = %q, want empty", got)
-	}
-	if got := APIKeyFingerprint("   "); got != "" {
-		t.Fatalf("APIKeyFingerprint(blank) = %q, want empty", got)
-	}
-
-	first := APIKeyFingerprint("sk-test-key")
-	second := APIKeyFingerprint("  sk-test-key  ")
-	if first == "" {
-		t.Fatal("fingerprint should not be empty")
-	}
-	if first != second {
-		t.Fatalf("fingerprint should ignore surrounding whitespace: %q != %q", first, second)
-	}
-	if !IsAPIKeyFingerprint(first) {
-		t.Fatalf("IsAPIKeyFingerprint(%q) = false, want true", first)
-	}
-	if APIKeyFingerprint("sk-test-key-2") == first {
-		t.Fatal("different keys should produce different fingerprints")
-	}
-	if IsAPIKeyFingerprint("sha256:xyz") {
-		t.Fatal("malformed fingerprint should be rejected")
-	}
-}
-
 func TestExpandWorkspacePath(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
@@ -54,93 +27,43 @@ func TestExpandWorkspacePath(t *testing.T) {
 	}
 }
 
-func TestWorkspaceForModelConfig_UsesBoundProfile(t *testing.T) {
-	defaultWorkspace := filepath.Join(t.TempDir(), "default")
-	isolatedWorkspace := filepath.Join(t.TempDir(), "isolated")
-	key := "sk-bound"
-	fingerprint := APIKeyFingerprint(key)
-
-	cfg := &Config{
-		Agents: AgentsConfig{Defaults: AgentDefaults{Workspace: defaultWorkspace}},
-		ModelList: SecureModelList{
-			&ModelConfig{ModelName: "bound-model", Model: "openai/gpt-4o", APIKeys: SimpleSecureStrings(key)},
-			{ModelName: "free-model", Model: "openai/gpt-4o-mini", APIKeys: SimpleSecureStrings("sk-other")},
-		},
-		WorkspaceIsolation: &WorkspaceIsolationConfig{
-			Enabled: boolValue(true),
-			Profiles: []WorkspaceProfileConfig{
-				{
-					ID:                 "team-a",
-					Name:               "Team A",
-					Path:               isolatedWorkspace,
-					APIKeyFingerprints: []string{fingerprint},
-				},
-			},
-		},
+func TestWorkspaceIsolation_EnabledDefaults(t *testing.T) {
+	cfg := &WorkspaceIsolationConfig{}
+	if cfg.IsEnabled() {
+		t.Fatal("empty isolation config should be disabled")
 	}
 
-	workspace, profile := cfg.WorkspaceForModelConfig(cfg.ModelList[0])
-	if workspace != isolatedWorkspace {
-		t.Fatalf("workspace = %q, want %q", workspace, isolatedWorkspace)
-	}
-	if profile == nil || profile.ID != "team-a" {
-		t.Fatalf("profile = %#v, want team-a", profile)
-	}
-
-	workspace, profile = cfg.WorkspaceForModelConfig(cfg.ModelList[1])
-	if workspace != defaultWorkspace {
-		t.Fatalf("unbound workspace = %q, want %q", workspace, defaultWorkspace)
-	}
-	if profile != nil {
-		t.Fatalf("unbound profile = %#v, want nil", profile)
-	}
-
-	workspace, _ = cfg.WorkspaceForModelConfig(nil)
-	if workspace != defaultWorkspace {
-		t.Fatalf("nil model workspace = %q, want %q", workspace, defaultWorkspace)
-	}
-}
-
-func TestWorkspaceIsolation_DisabledIgnoresProfiles(t *testing.T) {
-	defaultWorkspace := filepath.Join(t.TempDir(), "default")
-	key := "sk-bound"
-	cfg := &Config{
-		Agents: AgentsConfig{Defaults: AgentDefaults{Workspace: defaultWorkspace}},
-		ModelList: SecureModelList{
-			&ModelConfig{ModelName: "m", Model: "openai/gpt-4o", APIKeys: SimpleSecureStrings(key)},
-		},
-		WorkspaceIsolation: &WorkspaceIsolationConfig{
-			Enabled: boolValue(false),
-			Profiles: []WorkspaceProfileConfig{
-				{ID: "a", Path: filepath.Join(t.TempDir(), "a"), APIKeyFingerprints: []string{APIKeyFingerprint(key)}},
-			},
-		},
-	}
-
-	workspace, profile := cfg.WorkspaceForModelConfig(cfg.ModelList[0])
-	if workspace != defaultWorkspace || profile != nil {
-		t.Fatalf("disabled isolation returned workspace=%q profile=%#v", workspace, profile)
-	}
-}
-
-func TestWorkspaceIsolation_ImplicitEnableWithProfiles(t *testing.T) {
-	key := "sk-bound"
-	cfg := &Config{
-		Agents: AgentsConfig{Defaults: AgentDefaults{Workspace: filepath.Join(t.TempDir(), "default")}},
-		ModelList: SecureModelList{
-			&ModelConfig{ModelName: "m", Model: "openai/gpt-4o", APIKeys: SimpleSecureStrings(key)},
-		},
-		WorkspaceIsolation: &WorkspaceIsolationConfig{
-			Profiles: []WorkspaceProfileConfig{
-				{ID: "a", Path: filepath.Join(t.TempDir(), "a"), APIKeyFingerprints: []string{APIKeyFingerprint(key)}},
-			},
-		},
-	}
-	if cfg.WorkspaceIsolation == nil || !cfg.WorkspaceIsolation.IsEnabled() {
+	cfg.Profiles = []WorkspaceProfileConfig{{ID: "a", Path: filepath.Join(t.TempDir(), "a")}}
+	if !cfg.IsEnabled() {
 		t.Fatal("profiles should enable isolation when enabled is nil")
 	}
-	if _, profile := cfg.WorkspaceForModelConfig(cfg.ModelList[0]); profile == nil {
-		t.Fatal("expected a bound profile")
+
+	cfg.Enabled = boolValue(false)
+	if cfg.IsEnabled() {
+		t.Fatal("explicit enabled=false should win")
+	}
+}
+
+func TestWorkspaceProfileByID(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &Config{
+		WorkspaceIsolation: &WorkspaceIsolationConfig{
+			Profiles: []WorkspaceProfileConfig{
+				{ID: "team-a", Name: "Team A", Path: filepath.Join(dir, "a")},
+				{ID: "team-b", Path: filepath.Join(dir, "b")},
+			},
+		},
+	}
+	profile := cfg.WorkspaceProfileByID("TEAM-A")
+	if profile == nil || profile.Name != "Team A" {
+		t.Fatalf("profile = %#v, want team-a", profile)
+	}
+	path, profile, ok := cfg.WorkspacePathByID("team-b")
+	if !ok || profile == nil || path != filepath.Join(dir, "b") {
+		t.Fatalf("path=%q profile=%#v ok=%v", path, profile, ok)
+	}
+	if _, _, ok := cfg.WorkspacePathByID("missing"); ok {
+		t.Fatal("unknown workspace should not resolve")
 	}
 }
 
@@ -164,13 +87,12 @@ func TestWorkspaceProfile_EffectiveRestrictions(t *testing.T) {
 }
 
 func TestNormalizeWorkspaceIsolation(t *testing.T) {
-	fp1 := APIKeyFingerprint("sk-1")
-	fp2 := APIKeyFingerprint("sk-2")
+	dir := t.TempDir()
 	cfg := &WorkspaceIsolationConfig{
 		Profiles: []WorkspaceProfileConfig{
-			{ID: "", Name: "Team A", Path: "  " + filepath.Join(t.TempDir(), "team-a") + "  ", APIKeyFingerprints: []string{" " + strings.ToUpper(fp1) + " ", fp1}},
-			{ID: "", Name: "Team A", Path: filepath.Join(t.TempDir(), "team-b"), APIKeyFingerprints: []string{fp2}},
-			{ID: "team-a", Name: "Other", Path: filepath.Join(t.TempDir(), "team-c")},
+			{ID: "", Name: "Team A", Path: "  " + filepath.Join(dir, "team-a") + "  "},
+			{ID: "", Name: "Team A", Path: filepath.Join(dir, "team-b")},
+			{ID: "team-a", Name: "Other", Path: filepath.Join(dir, "team-c")},
 		},
 	}
 	if !NormalizeWorkspaceIsolation(cfg) {
@@ -185,9 +107,6 @@ func TestNormalizeWorkspaceIsolation(t *testing.T) {
 	if cfg.Profiles[2].ID != "team-a-3" {
 		t.Fatalf("third id = %q, want team-a-3", cfg.Profiles[2].ID)
 	}
-	if len(cfg.Profiles[0].APIKeyFingerprints) != 1 || cfg.Profiles[0].APIKeyFingerprints[0] != fp1 {
-		t.Fatalf("fingerprints = %#v, want [%s]", cfg.Profiles[0].APIKeyFingerprints, fp1)
-	}
 	if cfg.Profiles[0].Path != strings.TrimSpace(cfg.Profiles[0].Path) {
 		t.Fatal("path should be trimmed")
 	}
@@ -195,12 +114,11 @@ func TestNormalizeWorkspaceIsolation(t *testing.T) {
 
 func TestWorkspaceIsolation_Validate(t *testing.T) {
 	base := filepath.Join(t.TempDir(), "ws")
-	fp := APIKeyFingerprint("sk-1")
 
 	valid := &WorkspaceIsolationConfig{
 		Enabled: boolValue(true),
 		Profiles: []WorkspaceProfileConfig{
-			{ID: "a", Path: filepath.Join(base, "a"), APIKeyFingerprints: []string{fp}},
+			{ID: "a", Path: filepath.Join(base, "a")},
 			{ID: "b", Path: filepath.Join(base, "b")},
 		},
 	}
@@ -251,21 +169,6 @@ func TestWorkspaceIsolation_Validate(t *testing.T) {
 				{ID: "b", Path: filepath.Join(base, "x", "nested")},
 			},
 			want: "nested inside",
-		},
-		{
-			name: "invalid fingerprint",
-			profiles: []WorkspaceProfileConfig{
-				{ID: "a", Path: filepath.Join(base, "x"), APIKeyFingerprints: []string{"sha256:zzzz"}},
-			},
-			want: "invalid api key fingerprint",
-		},
-		{
-			name: "duplicate fingerprint",
-			profiles: []WorkspaceProfileConfig{
-				{ID: "a", Path: filepath.Join(base, "x"), APIKeyFingerprints: []string{fp}},
-				{ID: "b", Path: filepath.Join(base, "y"), APIKeyFingerprints: []string{fp}},
-			},
-			want: "already bound",
 		},
 	}
 

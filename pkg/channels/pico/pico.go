@@ -1225,6 +1225,9 @@ func (c *PicoChannel) handleMessageSend(pc *picoConn, msg PicoMessage) {
 		"session_id": sessionID,
 		"conn_id":    pc.id,
 	}
+	if workspaceID, _ := msg.Payload[PayloadKeyWorkspace].(string); strings.TrimSpace(workspaceID) != "" {
+		metadata[PayloadKeyWorkspace] = strings.TrimSpace(workspaceID)
+	}
 
 	logger.DebugCF("pico", "Received message", map[string]any{
 		"session_id": sessionID,

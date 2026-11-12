@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 
@@ -98,12 +97,32 @@ func (p *unavailableLLMProvider) Chat(
 
 func (p *unavailableLLMProvider) GetDefaultModel() string { return p.model }
 
+// agentInstanceOptions lets the runtime build a variant of an existing agent
+// that keeps its persona/model but uses another workspace directory.
+type agentInstanceOptions struct {
+	Workspace                 string
+	ProfileID                 string
+	Definition                *AgentContextDefinition
+	RestrictToWorkspace       *bool
+	AllowReadOutsideWorkspace *bool
+}
+
 // NewAgentInstance creates an agent instance from config.
 func NewAgentInstance(
 	agentCfg *config.AgentConfig,
 	defaults *config.AgentDefaults,
 	cfg *config.Config,
 	provider providers.LLMProvider,
+) *AgentInstance {
+	return newAgentInstance(agentCfg, defaults, cfg, provider, agentInstanceOptions{})
+}
+
+func newAgentInstance(
+	agentCfg *config.AgentConfig,
+	defaults *config.AgentDefaults,
+	cfg *config.Config,
+	provider providers.LLMProvider,
+	opts agentInstanceOptions,
 ) *AgentInstance {
 	if cfg != nil {
 		// Keep the subprocess isolation runtime aligned with the latest loaded config
@@ -113,46 +132,26 @@ func NewAgentInstance(
 
 	workspace := resolveAgentWorkspace(agentCfg, defaults)
 	definition := loadAgentDefinition(workspace)
+	if opts.Definition != nil {
+		// A workspace variant reuses the base agent's persona/tool policy.
+		definition = *opts.Definition
+	}
 
 	model := resolveAgentModel(agentCfg, defaults, definition)
 	fallbacks := resolveAgentFallbacks(agentCfg, defaults)
 
-	// Resolve the primary model entry once so workspace isolation and provider
-	// credentials are derived from the same api_key entry.
-	primaryModelCfg := lookupModelConfigByRef(cfg, model, defaults.Provider)
-	var workspaceProfile *config.WorkspaceProfileConfig
-	if cfg != nil {
-		effectiveWorkspace, profile := cfg.WorkspaceForModelConfig(primaryModelCfg)
-		if profile != nil {
-			workspaceProfile = profile
-			if effectiveWorkspace != "" && !sameWorkspacePath(effectiveWorkspace, workspace) {
-				workspace = effectiveWorkspace
-				// An isolated workspace may ship its own AGENT.md / SOUL.md. The
-				// agent definition (and its tool allowlist) is only replaced when
-				// the isolated directory actually defines an agent, so an empty
-				// directory does not silently widen the default tool policy.
-				isolatedDefinition := loadAgentDefinition(workspace)
-				switch {
-				case isolatedDefinition.Agent != nil:
-					definition = isolatedDefinition
-				default:
-					if isolatedDefinition.Soul != nil {
-						definition.Soul = isolatedDefinition.Soul
-					}
-					if isolatedDefinition.User != nil {
-						definition.User = isolatedDefinition.User
-					}
-				}
-			}
-		}
+	if opts.Workspace != "" {
+		workspace = config.ExpandWorkspacePath(opts.Workspace)
 	}
 	os.MkdirAll(workspace, 0o755)
 
 	restrict := defaults.RestrictToWorkspace
 	allowReadOutside := defaults.AllowReadOutsideWorkspace
-	if workspaceProfile != nil {
-		restrict = workspaceProfile.EffectiveRestrict(restrict)
-		allowReadOutside = workspaceProfile.EffectiveAllowReadOutside(allowReadOutside)
+	if opts.RestrictToWorkspace != nil {
+		restrict = *opts.RestrictToWorkspace
+	}
+	if opts.AllowReadOutsideWorkspace != nil {
+		allowReadOutside = *opts.AllowReadOutsideWorkspace
 	}
 	readRestrict := restrict && !allowReadOutside
 
@@ -374,7 +373,7 @@ func NewAgentInstance(
 		Workspace:                 workspace,
 		RestrictToWorkspace:       restrict,
 		AllowReadOutsideWorkspace: allowReadOutside,
-		WorkspaceProfileID:        workspaceProfileID(workspaceProfile),
+		WorkspaceProfileID:        opts.ProfileID,
 		MaxIterations:             maxIter,
 		MaxTokens:                 maxTokens,
 		Temperature:               temperature,
@@ -831,24 +830,4 @@ func initSessionStore(dir string) session.SessionStore {
 	}
 
 	return session.NewJSONLBackend(store)
-}
-
-// sameWorkspacePath compares two workspace paths, ignoring case on Windows.
-func sameWorkspacePath(a, b string) bool {
-	if a == "" || b == "" {
-		return a == b
-	}
-	cleanA := filepath.Clean(a)
-	cleanB := filepath.Clean(b)
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(cleanA, cleanB)
-	}
-	return cleanA == cleanB
-}
-
-func workspaceProfileID(profile *config.WorkspaceProfileConfig) string {
-	if profile == nil {
-		return ""
-	}
-	return profile.ID
 }

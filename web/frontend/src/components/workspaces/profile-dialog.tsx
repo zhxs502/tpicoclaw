@@ -81,7 +81,6 @@ export function ProfileDialog({
       path: trimmedPath,
       restrict_to_workspace: restrict,
       allow_read_outside_workspace: allowReadOutside,
-      api_key_fingerprints: initial?.api_key_fingerprints ?? [],
     })
   }
 

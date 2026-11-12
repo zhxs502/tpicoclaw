@@ -1,6 +1,6 @@
 import { launcherFetch } from "@/api/http"
 
-// API client for workspace isolation (api key -> workspace path bindings).
+// API client for named workspace profiles.
 
 export interface WorkspaceProfile {
   id: string
@@ -8,41 +8,12 @@ export interface WorkspaceProfile {
   path: string
   restrict_to_workspace?: boolean
   allow_read_outside_workspace?: boolean
-  api_key_fingerprints: string[]
-  key_count: number
-}
-
-export interface WorkspaceKey {
-  model_name: string
-  provider: string
-  model: string
-  key_index: number
-  key_mask: string
-  fingerprint: string
-  profile_id?: string
-  is_default_model: boolean
-}
-
-export interface WorkspaceAgent {
-  id: string
-  name?: string
-  model: string
-  workspace: string
-  profile_id?: string
-  is_default: boolean
-  restrict_to_workspace: boolean
 }
 
 export interface WorkspacesResponse {
   enabled: boolean
   default_workspace: string
-  default_model: string
-  active_workspace: string
-  active_profile_id?: string
   profiles: WorkspaceProfile[]
-  keys: WorkspaceKey[]
-  agents: WorkspaceAgent[]
-  warnings?: string[]
 }
 
 export interface WorkspaceProfileInput {
@@ -51,7 +22,6 @@ export interface WorkspaceProfileInput {
   path: string
   restrict_to_workspace?: boolean
   allow_read_outside_workspace?: boolean
-  api_key_fingerprints: string[]
 }
 
 export interface WorkspacesUpdate {

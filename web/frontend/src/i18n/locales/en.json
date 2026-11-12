@@ -53,6 +53,8 @@
       "noDefaultModel": "Unable to chat: No default model is selected. Set a default model on the Models page."
     },
     "newChat": "New Chat",
+    "workspace": "Workspace",
+    "workspaceDefault": "Default workspace",
     "notConnected": "Gateway is not running. Start it to chat.",
     "thinking": {
       "step1": "Thinking...",
@@ -169,35 +171,32 @@
     "version_unknown": "Unknown"
   },
   "workspaces": {
-    "description": "Bind API keys to isolated workspace directories. Agents using a bound key read, write, run commands, and store sessions under that workspace.",
+    "description": "Configure a name → path mapping for workspaces. Pick one next to the model selector in Chat; the same model can then use different directories.",
     "loadError": "Failed to load workspace settings",
     "retry": "Retry",
     "unsaved": "Unsaved",
-    "saved": "Workspace isolation saved.",
+    "saved": "Workspace settings saved.",
     "saveError": "Failed to save workspace settings",
     "applyHint": "Changes are saved automatically. They take effect after the gateway restarts, unless gateway hot reload is enabled.",
-    "disabledHint": "Isolation is off, so the bindings below are not applied.",
-    "activeUnbound": "The current chat model ({{model}}) has no workspace-bound API key, so chat still uses the default workspace.",
+    "disabledHint": "Workspace selection is off, so the Chat workspace selector is hidden.",
     "restartPending": "The running gateway still uses the previous configuration. Restart it to apply this workspace layout.",
     "restartNow": "Restart gateway",
     "restartDone": "Gateway restarted.",
     "restartError": "Failed to restart the gateway",
     "enable": {
-      "title": "Enable workspace isolation",
-      "description": "When enabled, every agent runs in the workspace bound to its model's API key. Unbound keys keep using the default workspace."
+      "title": "Enable workspace selection",
+      "description": "When enabled, the Chat header shows a workspace selector next to the model selector. The default workspace is used when none is selected."
     },
     "defaultWorkspace": "Default workspace",
-    "activeWorkspace": "Active workspace",
-    "activeModel": "Current chat model: {{model}}",
     "profiles": {
-      "title": "Isolated workspaces",
-      "description": "Each profile is a directory with its own files, sessions and skills.",
+      "title": "Workspaces",
+      "description": "Each workspace is a directory; sessions, files and skills for chats using it are stored there.",
       "add": "New workspace",
-      "empty": "No isolated workspace yet. Create one, then bind API keys to it.",
+      "empty": "No workspace yet. Create a name → path mapping first.",
       "edit": "Edit workspace",
       "delete": "Delete workspace",
       "deleteTitle": "Delete workspace?",
-      "deleteDescription": "\"{{name}}\" will be removed. API keys bound to it fall back to the default workspace.",
+      "deleteDescription": "\"{{name}}\" will be removed. Chats using it fall back to the default workspace.",
       "keyCount": "{{count}} key(s)",
       "restricted": "Confined to directory",
       "unrestricted": "Can leave directory",
@@ -224,9 +223,9 @@
       "unbound": "Default workspace"
     },
     "dialog": {
-      "addTitle": "New isolated workspace",
-      "editTitle": "Edit isolated workspace",
-      "description": "The directory is created automatically. Bind API keys after saving the workspace.",
+      "addTitle": "New workspace",
+      "editTitle": "Edit workspace",
+      "description": "The directory is created automatically. The workspace appears in the Chat selector after the gateway restarts.",
       "name": "Name",
       "namePlaceholder": "e.g. Team A",
       "path": "Workspace path",

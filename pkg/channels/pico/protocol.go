@@ -28,6 +28,7 @@ const (
 	PayloadKeyPlaceholder = "placeholder"
 	PayloadKeyToolCalls   = "tool_calls"
 	PayloadKeyModelName   = "model_name"
+	PayloadKeyWorkspace   = "workspace"
 	PayloadKeyUsage       = "usage"
 
 	MessageKindThought   = "thought"

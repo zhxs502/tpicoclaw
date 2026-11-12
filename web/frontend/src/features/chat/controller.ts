@@ -22,10 +22,21 @@ import { type GatewayState, gatewayAtom } from "@/store/gateway"
 
 const store = getDefaultStore()
 
+const WORKSPACE_STORAGE_KEY = "picoclaw.chat.workspace"
+
+function readStoredWorkspace(): string {
+  try {
+    return localStorage.getItem(WORKSPACE_STORAGE_KEY) ?? ""
+  } catch {
+    return ""
+  }
+}
+
 let wsRef: WebSocket | null = null
 let isConnecting = false
 let msgIdCounter = 0
 let activeSessionIdRef = getChatState().activeSessionId
+let activeWorkspaceRef = readStoredWorkspace()
 let initialized = false
 let unsubscribeGateway: (() => void) | null = null
 let hydratePromise: Promise<void> | null = null
@@ -33,6 +44,25 @@ let connectionGeneration = 0
 let reconnectTimer: number | null = null
 let reconnectAttempts = 0
 let shouldMaintainConnection = false
+
+// getActiveWorkspace returns the workspace profile id selected for new turns.
+export function getActiveWorkspace(): string {
+  return activeWorkspaceRef
+}
+
+// setActiveWorkspace persists the workspace selection for the next turns.
+export function setActiveWorkspace(workspaceId: string) {
+  activeWorkspaceRef = workspaceId.trim()
+  try {
+    if (activeWorkspaceRef) {
+      localStorage.setItem(WORKSPACE_STORAGE_KEY, activeWorkspaceRef)
+    } else {
+      localStorage.removeItem(WORKSPACE_STORAGE_KEY)
+    }
+  } catch {
+    // ignore storage failures
+  }
+}
 
 function clearReconnectTimer() {
   if (reconnectTimer !== null) {
@@ -264,7 +294,7 @@ export async function hydrateActiveSession() {
     return
   }
 
-  hydratePromise = loadSessionMessages(storedSessionId)
+  hydratePromise = loadSessionMessages(storedSessionId, activeWorkspaceRef)
     .then((historyMessages) => {
       const currentState = getChatState()
       if (currentState.activeSessionId !== storedSessionId) {
@@ -361,6 +391,9 @@ export function sendChatMessage({
       content: normalizedContent,
       media: normalizedAttachments.map((attachment) => attachment.url),
     }
+    if (activeWorkspaceRef) {
+      payload.workspace = activeWorkspaceRef
+    }
 
     socket.send(
       JSON.stringify({
@@ -386,7 +419,10 @@ export async function switchChatSession(sessionId: string) {
   }
 
   try {
-    const historyMessages = await loadSessionMessages(sessionId)
+    const historyMessages = await loadSessionMessages(
+      sessionId,
+      activeWorkspaceRef,
+    )
 
     disconnectChatInternal({ clearDesiredConnection: false })
     setActiveSessionId(sessionId)
