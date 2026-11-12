@@ -4174,3 +4174,35 @@ func TestHandleSetDefaultModel_RepointsAgentPinnedToConcreteModelID(t *testing.T
 		t.Fatalf("main model = %#v, want gpt-4o", pin)
 	}
 }
+
+func TestFollowsGlobalDefault_AliasAndConcreteID(t *testing.T) {
+	list := []*config.ModelConfig{
+		{ModelName: "deepseek", Model: "deepseek/deepseek-chat"},
+		{ModelName: "kimi", Model: "moonshot/kimi-k3.1-pro"},
+	}
+
+	tests := []struct {
+		name       string
+		pin        string
+		oldDefault string
+		want       bool
+	}{
+		{name: "same alias", pin: "deepseek", oldDefault: "deepseek", want: true},
+		{name: "alias pin, concrete default", pin: "deepseek", oldDefault: "deepseek/deepseek-chat", want: true},
+		{name: "concrete pin, alias default", pin: "deepseek/deepseek-chat", oldDefault: "deepseek", want: true},
+		{name: "unrelated alias", pin: "kimi", oldDefault: "deepseek", want: false},
+		{name: "empty pin", pin: "", oldDefault: "deepseek", want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := followsGlobalDefault(
+				&config.AgentModelConfig{Primary: tc.pin},
+				tc.oldDefault,
+				list,
+			)
+			if got != tc.want {
+				t.Fatalf("followsGlobalDefault(%q, %q) = %v, want %v", tc.pin, tc.oldDefault, got, tc.want)
+			}
+		})
+	}
+}

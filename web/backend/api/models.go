@@ -1039,15 +1039,27 @@ func followsGlobalDefault(model *config.AgentModelConfig, oldDefault string, lis
 	if pin == oldDefault {
 		return true
 	}
+	// A hot config reload can rewrite defaults.model_name to the provider's
+	// concrete model id while an agent pin still holds the alias (or the other
+	// way round). Compare both spellings through model_list before deciding.
+	pinModel := modelNameOrID(pin, list)
+	oldModel := modelNameOrID(oldDefault, list)
+	return pin == oldModel || pinModel == oldDefault || pinModel == oldModel
+}
+
+// modelNameOrID resolves a model_list alias to its configured model id. Values
+// that are not an alias (already concrete ids) are returned unchanged.
+func modelNameOrID(value string, list []*config.ModelConfig) string {
+	value = strings.TrimSpace(value)
 	for _, mc := range list {
-		if mc == nil || strings.TrimSpace(mc.ModelName) != oldDefault {
+		if mc == nil || strings.TrimSpace(mc.ModelName) != value {
 			continue
 		}
-		if strings.TrimSpace(mc.Model) == pin {
-			return true
+		if model := strings.TrimSpace(mc.Model); model != "" {
+			return model
 		}
 	}
-	return false
+	return value
 }
 
 // handleSetDefaultModel sets the global default model and repoints every agent
