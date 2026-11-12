@@ -182,3 +182,39 @@ func TestWorkspaceIsolation_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadConfig_AcceptsLegacyAPIKeyFingerprints(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.WorkspaceIsolation = &WorkspaceIsolationConfig{
+		Enabled: boolValue(true),
+		Profiles: []WorkspaceProfileConfig{
+			{
+				ID:                 "team-a",
+				Name:               "Team A",
+				Path:               filepath.Join(t.TempDir(), "team-a"),
+				APIKeyFingerprints: []string{"sha256:0123456789abcdef"},
+			},
+		},
+	}
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := SaveConfig(path, cfg); err != nil {
+		t.Fatalf("SaveConfig: %v", err)
+	}
+
+	loaded, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("legacy config should still load: %v", err)
+	}
+	if loaded.WorkspaceIsolation == nil || len(loaded.WorkspaceIsolation.Profiles) != 1 {
+		t.Fatalf("workspace isolation = %#v", loaded.WorkspaceIsolation)
+	}
+	if got := len(loaded.WorkspaceIsolation.Profiles[0].APIKeyFingerprints); got != 1 {
+		t.Fatalf("legacy fingerprints = %d, want 1 after load", got)
+	}
+
+	normalized := *loaded.WorkspaceIsolation
+	NormalizeWorkspaceIsolation(&normalized)
+	if got := len(normalized.Profiles[0].APIKeyFingerprints); got != 0 {
+		t.Fatalf("fingerprints = %d, want cleared by normalization", got)
+	}
+}

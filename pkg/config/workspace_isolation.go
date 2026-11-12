@@ -36,6 +36,10 @@ type WorkspaceProfileConfig struct {
 	// AllowReadOutsideWorkspace optionally overrides
 	// agents.defaults.allow_read_outside_workspace for this workspace.
 	AllowReadOutsideWorkspace *bool `json:"allow_read_outside_workspace,omitempty"`
+	// APIKeyFingerprints is deprecated. It is kept only so configs written by
+	// the previous api-key binding implementation still load; runtime and the
+	// Web UI ignore it, and NormalizeWorkspaceIsolation clears it on save.
+	APIKeyFingerprints []string `json:"api_key_fingerprints,omitempty"`
 }
 
 const (
@@ -160,6 +164,11 @@ func NormalizeWorkspaceIsolation(cfg *WorkspaceIsolationConfig) bool {
 		profile.ID = trimmedID
 		profile.Name = trimmedName
 		profile.Path = trimmedPath
+		if len(profile.APIKeyFingerprints) > 0 {
+			// Drop bindings from the deprecated api-key based implementation.
+			profile.APIKeyFingerprints = nil
+			changed = true
+		}
 
 		if profile.ID == "" {
 			profile.ID = workspaceProfileSlug(profile.Name)
