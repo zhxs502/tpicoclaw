@@ -166,7 +166,7 @@ func registerSharedTools(
 			if cfg.Tools.Message.MediaEnabled {
 				messageTool.ConfigureLocalMedia(
 					agent.Workspace,
-					cfg.Agents.Defaults.RestrictToWorkspace,
+					agent.RestrictToWorkspace,
 					cfg.Agents.Defaults.GetMaxMediaSize(),
 					allowReadPaths,
 				)
@@ -242,7 +242,7 @@ func registerSharedTools(
 		if cfg.Tools.IsToolEnabled("send_file") {
 			sendFileTool := tools.NewSendFileTool(
 				agent.Workspace,
-				cfg.Agents.Defaults.RestrictToWorkspace,
+				agent.RestrictToWorkspace,
 				cfg.Agents.Defaults.GetMaxMediaSize(),
 				nil,
 				allowReadPaths,
@@ -257,12 +257,22 @@ func registerSharedTools(
 		if cfg.Tools.IsToolEnabled("load_image") {
 			loadImageTool := tools.NewLoadImageTool(
 				agent.Workspace,
-				cfg.Agents.Defaults.RestrictToWorkspace,
+				agent.RestrictToWorkspace,
 				cfg.Agents.Defaults.GetMaxMediaSize(),
 				nil,
 				allowReadPaths,
 			)
 			agent.Tools.Register(loadImageTool)
+		}
+
+		if cfg.Tools.IsToolEnabled("read_image") {
+			readImageTool := tools.NewReadImageTool(
+				agent.Workspace,
+				agent.RestrictToWorkspace,
+				nil,
+				allowReadPaths,
+			)
+			agent.Tools.Register(readImageTool)
 		}
 
 		// Skill discovery and installation tools

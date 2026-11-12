@@ -119,8 +119,8 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+    scrollbar-width: auto;
+    scrollbar-color: var(--muted-foreground) transparent;
   }
 
   body {
@@ -129,8 +129,8 @@
 
   /* WebKit Custom Scrollbar */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 10px;
+    height: 10px;
   }
 
   ::-webkit-scrollbar-track {
@@ -138,12 +138,13 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 4px;
+    background: var(--muted-foreground);
+    border-radius: 6px;
+    min-height: 48px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--muted-foreground);
+    background: var(--foreground);
   }
 }
 

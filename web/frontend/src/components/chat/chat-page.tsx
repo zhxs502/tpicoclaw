@@ -1,6 +1,7 @@
 import { IconPlus } from "@tabler/icons-react"
 import { useAtom } from "jotai"
 import {
+  memo,
   type ChangeEvent,
   type ClipboardEvent,
   type DragEvent,
@@ -40,6 +41,7 @@ import { useGateway } from "@/hooks/use-gateway"
 import { usePicoChat } from "@/hooks/use-pico-chat"
 import { useSessionHistory } from "@/hooks/use-session-history"
 import type { AssistantDetailVisibility } from "@/store/chat"
+import type { ChatMessage } from "@/store/chat"
 import type { ConnectionState } from "@/store/chat"
 import type { ChatAttachment } from "@/store/chat"
 import {
@@ -99,6 +101,67 @@ function resolveChatInputDisabledReason({
 
   return null
 }
+
+interface MessageListProps {
+  messages: ChatMessage[]
+  isTyping: boolean
+  assistantDetailVisibility: AssistantDetailVisibility
+  hasAvailableModels: boolean
+  defaultModelName: string
+  isConnected: boolean
+}
+
+const MessageList = memo(function MessageList({
+  messages,
+  isTyping,
+  assistantDetailVisibility,
+  hasAvailableModels,
+  defaultModelName,
+  isConnected,
+}: MessageListProps) {
+  return (
+    <>
+      {messages.length === 0 && !isTyping && (
+        <ChatEmptyState
+          hasAvailableModels={hasAvailableModels}
+          defaultModelName={defaultModelName}
+          isConnected={isConnected}
+        />
+      )}
+
+      {messages.map((msg) => {
+        if (
+          !shouldShowAssistantMessage(assistantDetailVisibility, msg.kind)
+        ) {
+          return null
+        }
+
+        return (
+          <div key={msg.id} className="flex w-full">
+            {msg.role === "assistant" ? (
+              <AssistantMessage
+                content={msg.content}
+                attachments={msg.attachments}
+                kind={msg.kind}
+                modelName={msg.modelName}
+                toolCalls={msg.toolCalls}
+                timestamp={msg.timestamp}
+              />
+            ) : (
+              <UserMessage
+                content={msg.content}
+                attachments={msg.attachments}
+                timestamp={msg.timestamp}
+              />
+            )}
+          </div>
+        )
+      })}
+
+      {isTyping && <TypingIndicator />}
+    </>
+  )
+})
 
 export function ChatPage() {
   const { t } = useTranslation()
@@ -389,44 +452,14 @@ export function ChatPage() {
         className="min-h-0 flex-1 [scrollbar-gutter:stable] overflow-y-auto px-4 py-6 md:px-8 lg:px-24 xl:px-48"
       >
         <div className="mx-auto flex w-full max-w-250 flex-col gap-8 pb-8">
-          {messages.length === 0 && !isTyping && (
-            <ChatEmptyState
-              hasAvailableModels={hasAvailableModels}
-              defaultModelName={defaultModelName}
-              isConnected={isGatewayRunning}
-            />
-          )}
-
-          {messages.map((msg) => {
-            if (
-              !shouldShowAssistantMessage(assistantDetailVisibility, msg.kind)
-            ) {
-              return null
-            }
-
-            return (
-              <div key={msg.id} className="flex w-full">
-                {msg.role === "assistant" ? (
-                  <AssistantMessage
-                    content={msg.content}
-                    attachments={msg.attachments}
-                    kind={msg.kind}
-                    modelName={msg.modelName}
-                    toolCalls={msg.toolCalls}
-                    timestamp={msg.timestamp}
-                  />
-                ) : (
-                  <UserMessage
-                    content={msg.content}
-                    attachments={msg.attachments}
-                    timestamp={msg.timestamp}
-                  />
-                )}
-              </div>
-            )
-          })}
-
-          {isTyping && <TypingIndicator />}
+          <MessageList
+            messages={messages}
+            isTyping={isTyping}
+            assistantDetailVisibility={assistantDetailVisibility}
+            hasAvailableModels={hasAvailableModels}
+            defaultModelName={defaultModelName}
+            isConnected={isGatewayRunning}
+          />
         </div>
       </div>
 

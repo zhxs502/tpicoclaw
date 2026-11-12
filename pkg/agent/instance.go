@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -47,6 +48,16 @@ type AgentInstance struct {
 	MCPServerAllowlist        map[string]struct{}
 	Candidates                []providers.FallbackCandidate
 	ImageCandidates           []providers.FallbackCandidate
+
+	// RestrictToWorkspace is the effective sandbox restriction for this agent.
+	// It usually mirrors agents.defaults.restrict_to_workspace, but a workspace
+	// isolation profile may override it per API key.
+	RestrictToWorkspace bool
+	// AllowReadOutsideWorkspace is the effective read-outside permission.
+	AllowReadOutsideWorkspace bool
+	// WorkspaceProfileID is the workspace isolation profile that supplied the
+	// workspace path, or empty when the default workspace is used.
+	WorkspaceProfileID string
 
 	// Router is non-nil when model routing is configured and the light model
 	// was successfully resolved. It scores each incoming message and decides
@@ -101,15 +112,49 @@ func NewAgentInstance(
 	}
 
 	workspace := resolveAgentWorkspace(agentCfg, defaults)
-	os.MkdirAll(workspace, 0o755)
-
 	definition := loadAgentDefinition(workspace)
 
 	model := resolveAgentModel(agentCfg, defaults, definition)
 	fallbacks := resolveAgentFallbacks(agentCfg, defaults)
 
+	// Resolve the primary model entry once so workspace isolation and provider
+	// credentials are derived from the same api_key entry.
+	primaryModelCfg := lookupModelConfigByRef(cfg, model, defaults.Provider)
+	var workspaceProfile *config.WorkspaceProfileConfig
+	if cfg != nil {
+		effectiveWorkspace, profile := cfg.WorkspaceForModelConfig(primaryModelCfg)
+		if profile != nil {
+			workspaceProfile = profile
+			if effectiveWorkspace != "" && !sameWorkspacePath(effectiveWorkspace, workspace) {
+				workspace = effectiveWorkspace
+				// An isolated workspace may ship its own AGENT.md / SOUL.md. The
+				// agent definition (and its tool allowlist) is only replaced when
+				// the isolated directory actually defines an agent, so an empty
+				// directory does not silently widen the default tool policy.
+				isolatedDefinition := loadAgentDefinition(workspace)
+				switch {
+				case isolatedDefinition.Agent != nil:
+					definition = isolatedDefinition
+				default:
+					if isolatedDefinition.Soul != nil {
+						definition.Soul = isolatedDefinition.Soul
+					}
+					if isolatedDefinition.User != nil {
+						definition.User = isolatedDefinition.User
+					}
+				}
+			}
+		}
+	}
+	os.MkdirAll(workspace, 0o755)
+
 	restrict := defaults.RestrictToWorkspace
-	readRestrict := restrict && !defaults.AllowReadOutsideWorkspace
+	allowReadOutside := defaults.AllowReadOutsideWorkspace
+	if workspaceProfile != nil {
+		restrict = workspaceProfile.EffectiveRestrict(restrict)
+		allowReadOutside = workspaceProfile.EffectiveAllowReadOutside(allowReadOutside)
+	}
+	readRestrict := restrict && !allowReadOutside
 
 	// Compile path whitelist patterns from config.
 	allowReadPaths := buildAllowReadPatterns(cfg)
@@ -327,6 +372,9 @@ func NewAgentInstance(
 		Model:                     model,
 		Fallbacks:                 fallbacks,
 		Workspace:                 workspace,
+		RestrictToWorkspace:       restrict,
+		AllowReadOutsideWorkspace: allowReadOutside,
+		WorkspaceProfileID:        workspaceProfileID(workspaceProfile),
 		MaxIterations:             maxIter,
 		MaxTokens:                 maxTokens,
 		Temperature:               temperature,
@@ -585,16 +633,16 @@ func resolvePrimaryProviderForCandidate(
 // resolveAgentWorkspace determines the workspace directory for an agent.
 func resolveAgentWorkspace(agentCfg *config.AgentConfig, defaults *config.AgentDefaults) string {
 	if agentCfg != nil && strings.TrimSpace(agentCfg.Workspace) != "" {
-		return expandHome(strings.TrimSpace(agentCfg.Workspace))
+		return config.ExpandWorkspacePath(strings.TrimSpace(agentCfg.Workspace))
 	}
 	// Use the configured default workspace (respects PICOCLAW_HOME)
 	if agentCfg == nil || agentCfg.Default || agentCfg.ID == "" ||
 		routing.NormalizeAgentID(agentCfg.ID) == "main" {
-		return expandHome(defaults.Workspace)
+		return config.ExpandWorkspacePath(defaults.Workspace)
 	}
 	// For named agents without explicit workspace, use default workspace with agent ID suffix
 	id := routing.NormalizeAgentID(agentCfg.ID)
-	return filepath.Join(expandHome(defaults.Workspace), "..", "workspace-"+id)
+	return filepath.Join(config.ExpandWorkspacePath(defaults.Workspace), "..", "workspace-"+id)
 }
 
 // resolveAgentModel resolves the primary model for an agent.
@@ -785,16 +833,22 @@ func initSessionStore(dir string) session.SessionStore {
 	return session.NewJSONLBackend(store)
 }
 
-func expandHome(path string) string {
-	if path == "" {
-		return path
+// sameWorkspacePath compares two workspace paths, ignoring case on Windows.
+func sameWorkspacePath(a, b string) bool {
+	if a == "" || b == "" {
+		return a == b
 	}
-	if path[0] == '~' {
-		home, _ := os.UserHomeDir()
-		if len(path) > 1 && path[1] == '/' {
-			return home + path[1:]
-		}
-		return home
+	cleanA := filepath.Clean(a)
+	cleanB := filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(cleanA, cleanB)
 	}
-	return path
+	return cleanA == cleanB
+}
+
+func workspaceProfileID(profile *config.WorkspaceProfileConfig) string {
+	if profile == nil {
+		return ""
+	}
+	return profile.ID
 }

@@ -428,6 +428,14 @@ func computeConfigSignature(cfg *config.Config) string {
 	if defaultModel != "" {
 		parts = append(parts, "model:"+defaultModel)
 	}
+	if workspace := strings.TrimSpace(cfg.Agents.Defaults.Workspace); workspace != "" {
+		parts = append(parts, "workspace:"+workspace)
+	}
+	if cfg.WorkspaceIsolation != nil {
+		if raw, err := json.Marshal(cfg.WorkspaceIsolation); err == nil {
+			parts = append(parts, "workspace_isolation:"+string(raw))
+		}
+	}
 	modelStreamingSignatures := computeModelStreamingSignatures(cfg)
 	if len(modelStreamingSignatures) > 0 {
 		parts = append(parts, "model_streaming:"+strings.Join(modelStreamingSignatures, ","))

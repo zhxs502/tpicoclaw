@@ -34,20 +34,21 @@ func init() {
 // Config is the current config structure with version support.
 type Config struct {
 	// Config schema version for migration.
-	Version   int             `json:"version"             yaml:"-"`
-	Isolation IsolationConfig `json:"isolation,omitempty" yaml:"-"`
-	Agents    AgentsConfig    `json:"agents"              yaml:"-"`
-	Session   SessionConfig   `json:"session,omitempty"   yaml:"-"`
-	Evolution EvolutionConfig `json:"evolution,omitempty" yaml:"-"`
-	Channels  ChannelsConfig  `json:"channel_list"        yaml:"channel_list"`
-	ModelList SecureModelList `json:"model_list"          yaml:"model_list"` // New model-centric provider configuration
-	Gateway   GatewayConfig   `json:"gateway"             yaml:"-"`
-	Events    EventsConfig    `json:"events,omitempty"    yaml:"-"`
-	Hooks     HooksConfig     `json:"hooks,omitempty"     yaml:"-"`
-	Tools     ToolsConfig     `json:"tools"               yaml:",inline"`
-	Heartbeat HeartbeatConfig `json:"heartbeat"           yaml:"-"`
-	Devices   DevicesConfig   `json:"devices"             yaml:"-"`
-	Voice     VoiceConfig     `json:"voice"               yaml:"-"`
+	Version            int                       `json:"version"             yaml:"-"`
+	Isolation          IsolationConfig           `json:"isolation,omitempty" yaml:"-"`
+	WorkspaceIsolation *WorkspaceIsolationConfig `json:"workspace_isolation,omitempty" yaml:"-"`
+	Agents             AgentsConfig              `json:"agents"              yaml:"-"`
+	Session            SessionConfig             `json:"session,omitempty"   yaml:"-"`
+	Evolution          EvolutionConfig           `json:"evolution,omitempty" yaml:"-"`
+	Channels           ChannelsConfig            `json:"channel_list"        yaml:"channel_list"`
+	ModelList          SecureModelList           `json:"model_list"          yaml:"model_list"` // New model-centric provider configuration
+	Gateway            GatewayConfig             `json:"gateway"             yaml:"-"`
+	Events             EventsConfig              `json:"events,omitempty"    yaml:"-"`
+	Hooks              HooksConfig               `json:"hooks,omitempty"     yaml:"-"`
+	Tools              ToolsConfig               `json:"tools"               yaml:",inline"`
+	Heartbeat          HeartbeatConfig           `json:"heartbeat"           yaml:"-"`
+	Devices            DevicesConfig             `json:"devices"             yaml:"-"`
+	Voice              VoiceConfig               `json:"voice"               yaml:"-"`
 	// BuildInfo contains build-time version information
 	BuildInfo BuildInfo `json:"build_info,omitempty" yaml:"-"`
 
@@ -1132,6 +1133,7 @@ type ToolsConfig struct {
 	LoadImage       ToolConfig         `json:"load_image"        yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_LOAD_IMAGE_"`
 	Message         MessageToolsConfig `json:"message"           yaml:"-"`
 	ReadFile        ReadFileToolConfig `json:"read_file"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_READ_FILE_"`
+	ReadImage       ToolConfig         `json:"read_image"        yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_READ_IMAGE_"`
 	Serial          ToolConfig         `json:"serial"            yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SERIAL_"`
 	SendFile        ToolConfig         `json:"send_file"         yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SEND_FILE_"`
 	SendTTS         ToolConfig         `json:"send_tts"          yaml:"-"                                                       envPrefix:"PICOCLAW_TOOLS_SEND_TTS_"`
@@ -1889,6 +1891,8 @@ func (t *ToolsConfig) IsToolEnabled(name string) bool {
 		return t.Message.Enabled
 	case "read_file":
 		return t.ReadFile.Enabled
+	case "read_image":
+		return t.ReadImage.Enabled
 	case "serial":
 		return t.Serial.Enabled
 	case "spawn":

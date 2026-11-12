@@ -21,6 +21,7 @@ import (
 	"github.com/tencent-connect/botgo/constant"
 	"github.com/tencent-connect/botgo/dto"
 	"github.com/tencent-connect/botgo/event"
+	"github.com/tencent-connect/botgo/openapi"
 	"github.com/tencent-connect/botgo/openapi/options"
 	"github.com/tencent-connect/botgo/token"
 	"golang.org/x/oauth2"
@@ -128,6 +129,32 @@ func (c *QQChannel) Start(ctx context.Context) error {
 
 	// initialize OpenAPI client
 	c.api = botgo.NewOpenAPI(c.config.AppID, c.tokenSource).WithTimeout(5 * time.Second)
+
+	// Fix the Authorization header by hand.
+	//
+	// botgo v0.2.1 was written against resty v2.6.0, where addCredentials fell
+	// back to the client's AuthScheme (set by botgo's OnBeforeRequest hook) when
+	// building the header. resty >= v2.17 dropped that fallback and copies the
+	// AuthScheme into the request at creation time instead, which happens before
+	// OnBeforeRequest runs - so the header ends up as a bare token with no
+	// "QQBot " prefix and QQ rejects every call with 11241 (bad Authorization).
+	//
+	// Request filters run in PreRequestHook, i.e. after resty has written the
+	// header, so we can overwrite it there. RegisterReqFilter is process-global
+	// and ignored when the name is already registered, hence we read the token
+	// source off the channel at call time: a restarted channel swaps in a fresh
+	// token source instead of keeping this closure on a dead one.
+	openapi.RegisterReqFilter("picoclaw-qqbot-auth-fix", func(req *http.Request, _ *http.Response) error {
+		if c.tokenSource == nil {
+			return nil
+		}
+		tk, err := c.tokenSource.Token()
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", string(token.TypeQQBot)+" "+tk.AccessToken)
+		return nil
+	})
 
 	// register event handlers
 	intent := event.RegisterHandlers(

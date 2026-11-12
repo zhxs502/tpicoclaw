@@ -21,6 +21,11 @@
       }
     }
   },
+  "workspace_isolation": {
+    "_comment": "Bind model API keys to isolated workspace directories. Configure it in the Web UI (Workspaces) or see docs/guides/workspace-isolation.md.",
+    "enabled": false,
+    "profiles": []
+  },
   "evolution": {
     "enabled": false,
     "mode": "observe",

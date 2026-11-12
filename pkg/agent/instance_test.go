@@ -1373,3 +1373,58 @@ func TestNewAgentInstance_ExplicitEmptyToolsFieldBlocksAllTools(t *testing.T) {
 		})
 	}
 }
+
+func TestNewAgentInstance_AppliesWorkspaceIsolationProfile(t *testing.T) {
+	defaultWorkspace := t.TempDir()
+	isolatedWorkspace := t.TempDir()
+	key := "sk-isolated"
+	restrict := false
+	allowReadOutside := true
+
+	cfg := &config.Config{
+		Agents: config.AgentsConfig{
+			Defaults: config.AgentDefaults{
+				Workspace:           defaultWorkspace,
+				ModelName:           "isolated-model",
+				RestrictToWorkspace: true,
+			},
+		},
+		ModelList: config.SecureModelList{
+			{ModelName: "isolated-model", Model: "openai/gpt-4o", APIKeys: config.SimpleSecureStrings(key)},
+		},
+		WorkspaceIsolation: &config.WorkspaceIsolationConfig{
+			Profiles: []config.WorkspaceProfileConfig{
+				{
+					ID:                        "team-a",
+					Name:                      "Team A",
+					Path:                      isolatedWorkspace,
+					RestrictToWorkspace:       &restrict,
+					AllowReadOutsideWorkspace: &allowReadOutside,
+					APIKeyFingerprints:        []string{config.APIKeyFingerprint(key)},
+				},
+			},
+		},
+		Tools: config.ToolsConfig{
+			ReadFile: config.ReadFileToolConfig{Enabled: true},
+			ListDir:  config.ToolConfig{Enabled: true},
+		},
+	}
+
+	agent := NewAgentInstance(nil, &cfg.Agents.Defaults, cfg, &mockProvider{})
+
+	if agent.Workspace != isolatedWorkspace {
+		t.Fatalf("Workspace = %q, want %q", agent.Workspace, isolatedWorkspace)
+	}
+	if agent.WorkspaceProfileID != "team-a" {
+		t.Fatalf("WorkspaceProfileID = %q, want team-a", agent.WorkspaceProfileID)
+	}
+	if agent.RestrictToWorkspace {
+		t.Fatal("profile restrict override should be false")
+	}
+	if !agent.AllowReadOutsideWorkspace {
+		t.Fatal("profile allow-read override should be true")
+	}
+	if info, err := os.Stat(isolatedWorkspace); err != nil || !info.IsDir() {
+		t.Fatalf("isolated workspace was not created: %v", err)
+	}
+}

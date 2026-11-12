@@ -10,6 +10,7 @@ import TextareaAutosize from "react-textarea-autosize"
 
 import { ContextUsageRing } from "@/components/chat/context-usage-ring"
 import { Button } from "@/components/ui/button"
+import { useIsTouchPrimary } from "@/hooks/use-touch-primary"
 import { cn } from "@/lib/utils"
 import type { ChatAttachment, ContextUsage } from "@/store/chat"
 
@@ -72,6 +73,8 @@ export function ChatComposer({
       : t(`chat.disabledPlaceholder.${inputDisabledReason}`)
   const placeholder = disabledMessage ?? t("chat.placeholder")
 
+  const isTouchPrimary = useIsTouchPrimary()
+
   const handleKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     const nativeEvent = e.nativeEvent as Event & {
       isComposing?: boolean
@@ -85,6 +88,7 @@ export function ChatComposer({
       return
     }
     if (e.key === "Enter" && !e.shiftKey) {
+      if (isTouchPrimary) return // 触屏(手机/安卓): Enter 只换行, 通过按钮发送
       e.preventDefault()
       onSend()
     }
@@ -209,7 +213,7 @@ export function ChatComposer({
               : "pointer-events-none -translate-y-1 opacity-0",
           )}
         >
-          {t("chat.composeHint")}
+          {isTouchPrimary ? t("chat.composeHintMobile") : t("chat.composeHint")}
         </div>
       </div>
     </div>

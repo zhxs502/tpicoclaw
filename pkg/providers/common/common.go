@@ -117,6 +117,15 @@ func SerializeMessages(messages []Message) []any {
 			})
 		}
 		for _, mediaURL := range m.Media {
+			if strings.HasPrefix(mediaURL, "file_id:") {
+				// DeepSeek Files API reference: {"type":"file","file_id":"..."}
+				parts = append(parts, map[string]any{
+					"type":    "file",
+					"file_id": strings.TrimPrefix(mediaURL, "file_id:"),
+				})
+				continue
+			}
+
 			if strings.HasPrefix(mediaURL, "data:image/") {
 				parts = append(parts, map[string]any{
 					"type": "image_url",

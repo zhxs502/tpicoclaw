@@ -776,14 +776,15 @@ func parseMessageToolContent(argsJSON string) (string, bool) {
 }
 
 // sessionsDir resolves the path to the gateway's session storage directory.
-// It reads the workspace from config, falling back to ~/.picoclaw/workspace.
+// It follows the effective workspace for the default chat model, so an
+// isolated workspace bound to the model's API key is used when configured.
 func (h *Handler) sessionsDir() (string, error) {
 	cfg, err := config.LoadConfig(h.configPath)
 	if err != nil {
 		return "", err
 	}
 
-	return resolveSessionsDir(cfg.Agents.Defaults.Workspace), nil
+	return resolveSessionsDir(effectiveWorkspacePath(cfg)), nil
 }
 
 func (h *Handler) sessionRuntimeSettings() (string, int, error) {
@@ -792,7 +793,7 @@ func (h *Handler) sessionRuntimeSettings() (string, int, error) {
 		return "", 0, err
 	}
 
-	return resolveSessionsDir(cfg.Agents.Defaults.Workspace), cfg.Agents.Defaults.GetToolFeedbackMaxArgsLength(), nil
+	return resolveSessionsDir(effectiveWorkspacePath(cfg)), cfg.Agents.Defaults.GetToolFeedbackMaxArgsLength(), nil
 }
 
 func resolveSessionsDir(workspace string) string {
