@@ -111,6 +111,12 @@ Full guide: [English](docs/guides/workspace-isolation.md) · [中文](docs/guide
 | Windows x64 | `picoclaw-windows-amd64.zip` (`picoclaw.exe` + `picoclaw-launcher.exe`) |
 | Linux amd64 | `picoclaw-linux-amd64.zip` (`picoclaw` + `picoclaw-launcher`) |
 | Android arm64 | `picoclaw-android-arm64.zip` (Termux; run from `$HOME`) |
+| Android arm64 (APK / `jniLibs`) | `picoclaw-android-arm64-so.zip` (`arm64-v8a/libpicoclaw.so` + `libpicoclaw-web.so`) |
+
+The `.so` files are the same Android/arm64 PIE executables renamed for
+`jniLibs` — they are **not** `-buildmode=c-shared` JNI libraries. Extract them
+before exec (`android:extractNativeLibs="true"`) and run `libpicoclaw-web.so`
+as a process.
 
 The launcher looks for the gateway binary (`picoclaw.exe` on Windows,
 `picoclaw` elsewhere) **in its own directory**, so keep both files together.
@@ -132,6 +138,10 @@ pnpm exec vite build --outDir ../backend/dist --emptyOutDir
 ```
 
 Android uses `-tags stdjson` and `GOOS=android GOARCH=arm64`.
+
+For an Android app bundle, the Makefile packages the same builds as
+`arm64-v8a/libpicoclaw.so` and `arm64-v8a/libpicoclaw-web.so`
+(`make build-android-bundle`); no special Go build mode is involved.
 
 ### Behavior notes
 
