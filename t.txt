@@ -1,0 +1,110 @@
+# 切模型无效（UI 切了仍由 deepseek 回答）— 2026-11-12
+
+源码：/sdcard/my_files/tpicoclaw（= /storage/emulated/0/my_files/tpicoclaw）
+config：/data/user/0/com.sipeed.picoclaw/files/picoclaw/config.json
+
+## 现象
+Web/App 聊天页模型下拉切到别的模型，回答仍是 deepseek。R 手动重启 gateway 也一样。
+
+## 根因（代码级）
+模型解析有三级优先级，UI 只改第三级。
+
+pkg/agent/instance.go:648 resolveAgentModel()
+  1. AGENT.md frontmatter 的 model:      ← 我的 AGENT.md 没有
+  2. agents.list[].model.primary         ← config 里 main 写的是字符串 "deepseek"
+  3. agents.defaults.model_name          ← UI 改的只有这个
+
+前端链路：
+  web/frontend/src/hooks/use-chat-models.ts:70  handleSetDefault → api/models.ts:133 setDefaultModel
+  → POST /api/models/default
+  → web/backend/api/models.go:1030 handleSetDefaultModel
+     只执行 cfg.Agents.Defaults.ModelName = modelName（+ 清 fallback），
+     完全不动 agents.list。注释写的是 "sets the default model for all agents"，与实现不符。
+
+所以 main agent 被第 2 级钉死在 deepseek，第 3 级怎么改都轮不到。
+
+## 顺带确认（不是原因）
+- pkg/config/workspace_isolation.go:38 api_key_fingerprints 已标 deprecated，运行时忽略。
+- pkg/agent/instance.go resolveWorkspaceAgent 建 workspace 变体时 Model: {Primary: base.Model}，
+  即变体继承 base 的 model → 切工作区也不会换模型。
+- AgentModelConfig 有自定义 UnmarshalJSON（pkg/config/config.go:284），支持 "model": "字符串" 简写，
+  所以 config 里那种写法是合法的，不是配置写坏。
+
+## 已做的改动
+备份：config.json.bak-20261112-200932（17820 字节）
+改动仅一行（jq -S diff 验证，只此差异）：
+  -        "model": "deepseek"
+main agent 去掉显式 model，落到第 3 级跟随 agents.defaults.model_name（当前 = deepseek，行为不变）。
+kimi agent 的 "model": "kimi-k3.1-pro" 保留（它本就该独立）。
+改后 JSON 合法（jq empty 通过），权限/属主不变（-rw------- u0_a139），17791 字节。
+
+## 生效机制（代码证据）
+pkg/gateway/gateway.go:587 handleConfigReload
+  → createStartupProvider(newCfg)
+  → al.ReloadProviderAndConfig（pkg/agent/agent.go:381）
+      → pkg/agent/agent.go:404 NewAgentRegistry(cfg, provider) 全量重建 agent 实例
+  → restartServices
+即 config 改动会被 watcher 抓走，agent 实例重建，不需要杀进程。
+
+坑预警：gateway.go 里 reload 后有
+  if newModelID != "" { newCfg.Agents.Defaults.ModelName = newModelID }
+会把 alias 覆盖成 provider 返回的真实 model id（例如 alias "deepseek" → "deepseek-chat"）。
+所以 reload 之后 redisplays 的 default model 可能跟 UI 上选的名字不一样，属正常，别当成没生效。
+
+## 验证方法（待 R 做）
+1. App/Web 里把模型切到 kimi-k3.1-pro（或别的已配 key 的）。
+2. 发一句话。
+3. 检查：
+   jq -r ".agents.defaults.model_name" /data/user/0/com.sipeed.picoclaw/files/picoclaw/config.json
+   tail -1 <最新 session>.jsonl | jq -r .model
+   最新 session：/storage/emulated/0/Download/picoclaw/workspace/sessions/ 下 mtime 最新的 .jsonl
+4. 期望：config 的 default 变了，且新 assistant 消息的 model 不是 deepseek。
+
+若切了仍不换 → 下一个怀疑点（按可能性）：
+  a) config watcher 没触发（mtime 未变 / debounce 丢失）→ 手动重启 gateway 再试
+  b) session 历史里固化了旧 model，新消息复用旧 candidate → 新建会话再试
+  c) workspace 变体缓存（closeWorkspaceAgents 在 agent.go:435，正常应被清）
+
+## 待决定（代码级修法，需重编 .so）
+方案 B：handleSetDefaultModel 里同时处理 agent 级。
+但语义要小心：kimi agent 显式绑了 kimi-k3.1-pro，不该被"设默认"覆盖。
+建议只改那些 model 与旧 default 相同（或为空的）条目，
+或干脆按别名列表显式排除。当前先用 config 方案 A 顶着。
+
+## 源码修改（方案 B，2026-11-12 落地，待主力机编译验证）
+文件：web/backend/api/models.go
+
+1) handleSetDefaultModel 里，改 defaults 之前先抓旧值：
+     oldDefault := strings.TrimSpace(cfg.Agents.Defaults.ModelName)
+     cfg.Agents.Defaults.ModelName = modelName
+     cfg.Agents.Defaults.ModelFallbacks = removeModelName(...)
+     repointPinnedDefaultAgents(cfg, oldDefault, modelName)   // 新增
+     normalizeDefaultChainReferences(cfg)
+   函数注释同步改成"重指跟随全局默认的 agent，钉了别的模型的不动"。
+
+2) 新增两个函数（放在 handleSetDefaultModel 上方）：
+   repointPinnedDefaultAgents(cfg, oldDefault, newDefault)
+     - 遍历 cfg.Agents.List，对每个 agent 的 Model 和 Subagents.Model：
+       若该 pin 是"跟随旧默认"（见下），Primary 改成 newDefault，
+       并从它的 Fallbacks 里去掉 newDefault。
+     - Model == nil / Primary == "" 的原样不动（本来就继承 defaults）。
+   followsGlobalDefault(model, oldDefault, modelList) bool
+     - pin trim 后 == oldDefault → true
+     - 否则在 modelList 里找 ModelName == oldDefault 的那条，
+       若 pin == 那条的 Model（真实 model id）→ true
+     - 目的：热 reload 后 defaults.model_name 可能被改写成真实 id
+       （见上文"坑预警"），此时 pin 里还是 alias，两种情况都算跟随。
+
+3) 测试：web/backend/api/models_test.go 新增两个
+   TestHandleSetDefaultModel_RepointsAgentsFollowingDefault
+     main(pin=old default) → 跟随; kimi(pin=claude) → 不动;
+     inherit(model=nil) → 仍为 nil; sub.Subagents.Model 同样跟随。
+   TestHandleSetDefaultModel_RepointsAgentPinnedToConcreteModelID
+     defaults=alias、pin=concrete id 的别名错位场景。
+
+没改前端：UI 仍只有一个"默认模型"下拉，靠后端重指生效。
+若以后要区分"全局默认 / agent 独立绑定"，得改 UI（需一起重编前端产物）。
+
+## 状态（2026-11-12）
+- config 方案 A 已生效（本机，main 不再钉死）。
+- 源码方案 B 已写好，本机未跑 go test（编译太慢），主力机 go test ./web/backend/api/ 后编译。
