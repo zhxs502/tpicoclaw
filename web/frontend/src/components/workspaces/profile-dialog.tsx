@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 
 interface ProfileDialogProps {
   open: boolean
@@ -50,16 +49,12 @@ export function ProfileDialog({
   const { t } = useTranslation()
   const [name, setName] = useState("")
   const [path, setPath] = useState("")
-  const [restrict, setRestrict] = useState(true)
-  const [allowReadOutside, setAllowReadOutside] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => {
     if (!open) return
     setName(initial?.name ?? "")
     setPath(initial?.path ?? "")
-    setRestrict(initial?.restrict_to_workspace ?? true)
-    setAllowReadOutside(initial?.allow_read_outside_workspace ?? false)
     setError("")
   }, [open, initial])
 
@@ -79,8 +74,6 @@ export function ProfileDialog({
       id,
       name: trimmedName,
       path: trimmedPath,
-      restrict_to_workspace: restrict,
-      allow_read_outside_workspace: allowReadOutside,
     })
   }
 
@@ -126,34 +119,6 @@ export function ProfileDialog({
             <p className="text-muted-foreground text-xs">
               {t("workspaces.dialog.pathHint")}
             </p>
-          </div>
-
-          <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
-            <div>
-              <p className="text-sm font-medium">
-                {t("workspaces.dialog.restrict")}
-              </p>
-              <p className="text-muted-foreground mt-0.5 text-xs">
-                {t("workspaces.dialog.restrictHint")}
-              </p>
-            </div>
-            <Switch checked={restrict} onCheckedChange={setRestrict} />
-          </div>
-
-          <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
-            <div>
-              <p className="text-sm font-medium">
-                {t("workspaces.dialog.allowReadOutside")}
-              </p>
-              <p className="text-muted-foreground mt-0.5 text-xs">
-                {t("workspaces.dialog.allowReadOutsideHint")}
-              </p>
-            </div>
-            <Switch
-              checked={allowReadOutside}
-              onCheckedChange={setAllowReadOutside}
-              disabled={!restrict}
-            />
           </div>
 
           {error && <p className="text-destructive text-sm">{error}</p>}

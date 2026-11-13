@@ -81,18 +81,18 @@ workspaces; each workspace keeps its own sessions, files, skills and memory.
       {
         "id": "team-a",
         "name": "Team A",
-        "path": "~/.picoclaw/workspaces/team-a",
-        "restrict_to_workspace": true,
-        "allow_read_outside_workspace": false
+        "path": "~/.picoclaw/workspaces/team-a"
       }
     ]
   }
 }
 ```
 
-`profiles` is only a name → path mapping. `restrict_to_workspace` and
-`allow_read_outside_workspace` are optional per-workspace overrides of the
-global defaults. The gateway must restart (or `gateway.hot_reload` must be
+`profiles` is only a name → path mapping. File/exec restrictions always come
+from `agents.defaults.restrict_to_workspace` and
+`agents.defaults.allow_read_outside_workspace`; older configs that contain
+per-workspace overrides still load, but the overrides are ignored and cleared on
+the next save. The gateway must restart (or `gateway.hot_reload` must be
 enabled) before new or edited workspaces appear in Chat.
 
 At runtime the Web UI sends `workspace: <id>` with the message; the gateway runs
@@ -161,8 +161,9 @@ app bundle, the Makefile packages the same builds as
   directory for files, `exec`, sessions, skills and memory.
 - Workspace profiles are loaded at gateway startup. Restart the gateway (or
   enable `gateway.hot_reload`) after changing them.
-- `exec` and file tools are confined according to the workspace/global
-  `restrict_to_workspace` settings; child-process sandboxing is separate.
+- `exec` and file tools are confined according to the global
+  `restrict_to_workspace` settings; per-workspace overrides are no longer
+  applied. Child-process sandboxing is separate.
 - A workspace starts empty: it has its own `AGENT.md`/`SOUL.md`/`skills/` only
   if you put files there. The agent persona is inherited from the base agent.
 

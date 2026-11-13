@@ -30,11 +30,11 @@ type WorkspaceProfileConfig struct {
 	Name string `json:"name,omitempty"`
 	// Path is the workspace directory. It may start with "~".
 	Path string `json:"path"`
-	// RestrictToWorkspace optionally overrides
-	// agents.defaults.restrict_to_workspace for chats using this workspace.
+	// RestrictToWorkspace is deprecated and ignored. File/exec restrictions
+	// always come from agents.defaults; the field is kept only so configs
+	// written by older builds still load, and is cleared on save.
 	RestrictToWorkspace *bool `json:"restrict_to_workspace,omitempty"`
-	// AllowReadOutsideWorkspace optionally overrides
-	// agents.defaults.allow_read_outside_workspace for this workspace.
+	// AllowReadOutsideWorkspace is deprecated for the same reason.
 	AllowReadOutsideWorkspace *bool `json:"allow_read_outside_workspace,omitempty"`
 	// APIKeyFingerprints is deprecated. It is kept only so configs written by
 	// the previous api-key binding implementation still load; runtime and the
@@ -82,22 +82,6 @@ func (w *WorkspaceIsolationConfig) IsEnabled() bool {
 		return *w.Enabled
 	}
 	return len(w.Profiles) > 0
-}
-
-// EffectiveRestrict resolves restrict_to_workspace for a workspace selection.
-func (p *WorkspaceProfileConfig) EffectiveRestrict(defaultValue bool) bool {
-	if p == nil || p.RestrictToWorkspace == nil {
-		return defaultValue
-	}
-	return *p.RestrictToWorkspace
-}
-
-// EffectiveAllowReadOutside resolves allow_read_outside_workspace for a workspace.
-func (p *WorkspaceProfileConfig) EffectiveAllowReadOutside(defaultValue bool) bool {
-	if p == nil || p.AllowReadOutsideWorkspace == nil {
-		return defaultValue
-	}
-	return *p.AllowReadOutsideWorkspace
 }
 
 // DefaultWorkspacePath returns the expanded default workspace path.
@@ -167,6 +151,13 @@ func NormalizeWorkspaceIsolation(cfg *WorkspaceIsolationConfig) bool {
 		if len(profile.APIKeyFingerprints) > 0 {
 			// Drop bindings from the deprecated api-key based implementation.
 			profile.APIKeyFingerprints = nil
+			changed = true
+		}
+		if profile.RestrictToWorkspace != nil || profile.AllowReadOutsideWorkspace != nil {
+			// Security settings are global now; clear legacy per-workspace
+			// overrides so they cannot silently restrict a workspace again.
+			profile.RestrictToWorkspace = nil
+			profile.AllowReadOutsideWorkspace = nil
 			changed = true
 		}
 

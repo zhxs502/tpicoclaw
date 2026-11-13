@@ -16,9 +16,7 @@
       {
         "id": "team-a",
         "name": "Team A",
-        "path": "~/.picoclaw/workspaces/team-a",
-        "restrict_to_workspace": true,
-        "allow_read_outside_workspace": false
+        "path": "~/.picoclaw/workspaces/team-a"
       }
     ]
   }
@@ -31,8 +29,6 @@
 | `profiles[].id` | 稳定标识，格式 `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`；Web UI 会按名称生成。 |
 | `profiles[].name` | Web UI 和对话选择器里显示的名称。 |
 | `profiles[].path` | 工作区目录；绝对路径或以 `~` 开头，首次使用时创建。 |
-| `profiles[].restrict_to_workspace` | 可选，覆盖该工作区对话的全局限制。 |
-| `profiles[].allow_read_outside_workspace` | 可选，覆盖是否允许读目录外。 |
 
 ## Web UI 操作
 
@@ -57,7 +53,9 @@
 ## 隔离边界
 
 `restrict_to_workspace` / `allow_read_outside_workspace` 控制该工作区对话的文件
-与命令工具权限，不是操作系统沙箱；子进程隔离仍由 `pkg/isolation` 负责。全局
+与命令工具权限，是 **全局设置**（`agents.defaults`），对所有工作区生效；旧配置里的
+per-workspace 覆盖会被忽略，并在保存时清除。它不是操作系统沙箱；子进程隔离仍由
+`pkg/isolation` 负责。全局
 `tools.allow_read_paths` / `tools.allow_write_paths` 依然生效。
 
 ## 校验规则

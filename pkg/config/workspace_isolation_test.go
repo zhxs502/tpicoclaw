@@ -67,22 +67,23 @@ func TestWorkspaceProfileByID(t *testing.T) {
 	}
 }
 
-func TestWorkspaceProfile_EffectiveRestrictions(t *testing.T) {
-	profile := &WorkspaceProfileConfig{}
-	if !profile.EffectiveRestrict(true) {
-		t.Fatal("nil override should keep the default restrict value")
+func TestNormalizeWorkspaceIsolation_ClearsDeprecatedSecurityOverrides(t *testing.T) {
+	cfg := &WorkspaceIsolationConfig{
+		Profiles: []WorkspaceProfileConfig{
+			{
+				ID:                        "team-a",
+				Path:                      filepath.Join(t.TempDir(), "team-a"),
+				RestrictToWorkspace:       boolValue(true),
+				AllowReadOutsideWorkspace: boolValue(true),
+			},
+		},
 	}
-	if profile.EffectiveAllowReadOutside(false) {
-		t.Fatal("nil override should keep the default allow-read value")
+	if !NormalizeWorkspaceIsolation(cfg) {
+		t.Fatal("legacy security overrides should be reported as a change")
 	}
-
-	profile.RestrictToWorkspace = boolValue(false)
-	profile.AllowReadOutsideWorkspace = boolValue(true)
-	if profile.EffectiveRestrict(true) {
-		t.Fatal("explicit override should win")
-	}
-	if !profile.EffectiveAllowReadOutside(false) {
-		t.Fatal("explicit allow-read override should win")
+	profile := cfg.Profiles[0]
+	if profile.RestrictToWorkspace != nil || profile.AllowReadOutsideWorkspace != nil {
+		t.Fatalf("overrides not cleared: %#v", profile)
 	}
 }
 

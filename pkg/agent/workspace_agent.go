@@ -50,8 +50,6 @@ func (al *AgentLoop) resolveWorkspaceAgent(base *AgentInstance, ctx *bus.Inbound
 		}
 	}
 
-	restrict := profile.EffectiveRestrict(cfg.Agents.Defaults.RestrictToWorkspace)
-	allowReadOutside := profile.EffectiveAllowReadOutside(cfg.Agents.Defaults.AllowReadOutsideWorkspace)
 	agentCfg := &config.AgentConfig{
 		ID:        base.ID,
 		Name:      base.Name,
@@ -70,11 +68,9 @@ func (al *AgentLoop) resolveWorkspaceAgent(base *AgentInstance, ctx *bus.Inbound
 		cfg,
 		base.Provider,
 		agentInstanceOptions{
-			Workspace:                 path,
-			ProfileID:                 profile.ID,
-			Definition:                &base.Definition,
-			RestrictToWorkspace:       &restrict,
-			AllowReadOutsideWorkspace: &allowReadOutside,
+			Workspace:  path,
+			ProfileID:  profile.ID,
+			Definition: &base.Definition,
 		},
 	)
 

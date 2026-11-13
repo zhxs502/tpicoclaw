@@ -43,8 +43,6 @@ function toInput(profile: WorkspaceProfile): WorkspaceProfileInput {
     id: profile.id,
     name: profile.name ?? profile.id,
     path: profile.path,
-    restrict_to_workspace: profile.restrict_to_workspace ?? true,
-    allow_read_outside_workspace: profile.allow_read_outside_workspace ?? false,
   }
 }
 
@@ -110,12 +108,7 @@ export function WorkspacesPage() {
         try {
           const response = await updateWorkspaces({
             enabled: nextEnabled,
-            profiles: nextProfiles.map((profile) => ({
-              ...profile,
-              restrict_to_workspace: profile.restrict_to_workspace ?? true,
-              allow_read_outside_workspace:
-                profile.allow_read_outside_workspace ?? false,
-            })),
+            profiles: nextProfiles.map((profile) => ({ ...profile })),
           })
           if (seq !== saveSeq.current) return
           applyResponse(response)
@@ -369,29 +362,6 @@ export function WorkspacesPage() {
                         <p className="text-muted-foreground font-mono text-xs break-all">
                           {profile.path}
                         </p>
-
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <Badge
-                            variant="outline"
-                            className={
-                              profile.restrict_to_workspace
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-muted-foreground"
-                            }
-                          >
-                            {profile.restrict_to_workspace
-                              ? t("workspaces.profiles.restricted")
-                              : t("workspaces.profiles.unrestricted")}
-                          </Badge>
-                          {profile.allow_read_outside_workspace && (
-                            <Badge
-                              variant="outline"
-                              className="text-amber-600 dark:text-amber-400"
-                            >
-                              {t("workspaces.profiles.readOutside")}
-                            </Badge>
-                          )}
-                        </div>
                       </div>
                     ))}
                   </div>

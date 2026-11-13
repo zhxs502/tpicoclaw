@@ -13,11 +13,9 @@ import (
 
 // workspaceProfileResponse is the Web UI representation of one workspace.
 type workspaceProfileResponse struct {
-	ID                        string `json:"id"`
-	Name                      string `json:"name,omitempty"`
-	Path                      string `json:"path"`
-	RestrictToWorkspace       *bool  `json:"restrict_to_workspace,omitempty"`
-	AllowReadOutsideWorkspace *bool  `json:"allow_read_outside_workspace,omitempty"`
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+	Path string `json:"path"`
 }
 
 type workspacesResponse struct {
@@ -27,11 +25,9 @@ type workspacesResponse struct {
 }
 
 type workspaceProfilePayload struct {
-	ID                        string `json:"id"`
-	Name                      string `json:"name"`
-	Path                      string `json:"path"`
-	RestrictToWorkspace       *bool  `json:"restrict_to_workspace"`
-	AllowReadOutsideWorkspace *bool  `json:"allow_read_outside_workspace"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Path string `json:"path"`
 }
 
 type workspacesPayload struct {
@@ -87,11 +83,9 @@ func (h *Handler) handleUpdateWorkspaces(w http.ResponseWriter, r *http.Request)
 	}
 	for _, profile := range payload.Profiles {
 		isolation.Profiles = append(isolation.Profiles, config.WorkspaceProfileConfig{
-			ID:                        profile.ID,
-			Name:                      profile.Name,
-			Path:                      profile.Path,
-			RestrictToWorkspace:       profile.RestrictToWorkspace,
-			AllowReadOutsideWorkspace: profile.AllowReadOutsideWorkspace,
+			ID:   profile.ID,
+			Name: profile.Name,
+			Path: profile.Path,
 		})
 	}
 
@@ -144,11 +138,9 @@ func buildWorkspacesResponse(cfg *config.Config) workspacesResponse {
 	if cfg.WorkspaceIsolation != nil {
 		for _, profile := range cfg.WorkspaceIsolation.Profiles {
 			resp.Profiles = append(resp.Profiles, workspaceProfileResponse{
-				ID:                        profile.ID,
-				Name:                      profile.Name,
-				Path:                      profile.Path,
-				RestrictToWorkspace:       profile.RestrictToWorkspace,
-				AllowReadOutsideWorkspace: profile.AllowReadOutsideWorkspace,
+				ID:   profile.ID,
+				Name: profile.Name,
+				Path: profile.Path,
 			})
 		}
 	}

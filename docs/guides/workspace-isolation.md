@@ -17,9 +17,7 @@ skills.
       {
         "id": "team-a",
         "name": "Team A",
-        "path": "~/.picoclaw/workspaces/team-a",
-        "restrict_to_workspace": true,
-        "allow_read_outside_workspace": false
+        "path": "~/.picoclaw/workspaces/team-a"
       }
     ]
   }
@@ -32,8 +30,6 @@ skills.
 | `profiles[].id` | Stable identifier (`[A-Za-z0-9][A-Za-z0-9_-]{0,63}`); generated from the name in the Web UI. |
 | `profiles[].name` | Display name in the Web UI and chat selector. |
 | `profiles[].path` | Workspace directory. Absolute, or starting with `~`; created on first use. |
-| `profiles[].restrict_to_workspace` | Optional per-workspace override of the global setting. |
-| `profiles[].allow_read_outside_workspace` | Optional per-workspace read-outside override. |
 
 ## Web UI
 
@@ -63,7 +59,9 @@ With no workspace selected, chat uses `agents.defaults.workspace`.
 ## Isolation Limits
 
 `restrict_to_workspace` / `allow_read_outside_workspace` control the file and
-exec tools for chats using that workspace. This is not an OS sandbox:
+exec tools for chats using that workspace. These settings are **global**
+(`agents.defaults`) and apply to every workspace; older per-workspace overrides
+are ignored and cleared on save. This is not an OS sandbox:
 `pkg/isolation` handles child-process confinement separately. Global
 `tools.allow_read_paths` / `tools.allow_write_paths` still apply.
 

@@ -70,16 +70,14 @@ func TestHandleUpdateWorkspaces_SavesNamePathMapping(t *testing.T) {
 	defer cleanup()
 
 	isolated := filepath.Join(t.TempDir(), "team-a")
-	restrict := true
 	enabled := true
 	payload := workspacesPayload{
 		Enabled: &enabled,
 		Profiles: []workspaceProfilePayload{
 			{
-				ID:                  "team-a",
-				Name:                "Team A",
-				Path:                isolated,
-				RestrictToWorkspace: &restrict,
+				ID:   "team-a",
+				Name: "Team A",
+				Path: isolated,
 			},
 		},
 	}

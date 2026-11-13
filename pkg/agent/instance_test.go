@@ -1377,15 +1377,14 @@ func TestNewAgentInstance_ExplicitEmptyToolsFieldBlocksAllTools(t *testing.T) {
 func TestNewAgentInstance_WorkspaceVariant(t *testing.T) {
 	defaultWorkspace := t.TempDir()
 	isolatedWorkspace := t.TempDir()
-	restrict := false
-	allowReadOutside := true
 
 	cfg := &config.Config{
 		Agents: config.AgentsConfig{
 			Defaults: config.AgentDefaults{
-				Workspace:           defaultWorkspace,
-				ModelName:           "isolated-model",
-				RestrictToWorkspace: true,
+				Workspace:                 defaultWorkspace,
+				ModelName:                 "isolated-model",
+				RestrictToWorkspace:       false,
+				AllowReadOutsideWorkspace: true,
 			},
 		},
 		ModelList: config.SecureModelList{
@@ -1404,11 +1403,9 @@ func TestNewAgentInstance_WorkspaceVariant(t *testing.T) {
 		cfg,
 		&mockProvider{},
 		agentInstanceOptions{
-			Workspace:                 isolatedWorkspace,
-			ProfileID:                 "team-a",
-			Definition:                &base.Definition,
-			RestrictToWorkspace:       &restrict,
-			AllowReadOutsideWorkspace: &allowReadOutside,
+			Workspace:  isolatedWorkspace,
+			ProfileID:  "team-a",
+			Definition: &base.Definition,
 		},
 	)
 
@@ -1422,10 +1419,10 @@ func TestNewAgentInstance_WorkspaceVariant(t *testing.T) {
 		t.Fatalf("Model = %q, want base model %q", variant.Model, base.Model)
 	}
 	if variant.RestrictToWorkspace {
-		t.Fatal("workspace restrict override should be false")
+		t.Fatal("workspace variant should inherit the global unrestricted setting")
 	}
 	if !variant.AllowReadOutsideWorkspace {
-		t.Fatal("workspace allow-read override should be true")
+		t.Fatal("workspace variant should inherit the global read-outside setting")
 	}
 	if info, err := os.Stat(isolatedWorkspace); err != nil || !info.IsDir() {
 		t.Fatalf("isolated workspace was not created: %v", err)

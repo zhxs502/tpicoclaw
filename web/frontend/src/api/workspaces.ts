@@ -6,8 +6,6 @@ export interface WorkspaceProfile {
   id: string
   name?: string
   path: string
-  restrict_to_workspace?: boolean
-  allow_read_outside_workspace?: boolean
 }
 
 export interface WorkspacesResponse {
@@ -20,8 +18,6 @@ export interface WorkspaceProfileInput {
   id: string
   name: string
   path: string
-  restrict_to_workspace?: boolean
-  allow_read_outside_workspace?: boolean
 }
 
 export interface WorkspacesUpdate {

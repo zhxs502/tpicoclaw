@@ -49,8 +49,7 @@ type AgentInstance struct {
 	ImageCandidates           []providers.FallbackCandidate
 
 	// RestrictToWorkspace is the effective sandbox restriction for this agent.
-	// It usually mirrors agents.defaults.restrict_to_workspace, but a workspace
-	// isolation profile may override it per API key.
+	// It mirrors agents.defaults.restrict_to_workspace.
 	RestrictToWorkspace bool
 	// AllowReadOutsideWorkspace is the effective read-outside permission.
 	AllowReadOutsideWorkspace bool
@@ -100,11 +99,9 @@ func (p *unavailableLLMProvider) GetDefaultModel() string { return p.model }
 // agentInstanceOptions lets the runtime build a variant of an existing agent
 // that keeps its persona/model but uses another workspace directory.
 type agentInstanceOptions struct {
-	Workspace                 string
-	ProfileID                 string
-	Definition                *AgentContextDefinition
-	RestrictToWorkspace       *bool
-	AllowReadOutsideWorkspace *bool
+	Workspace  string
+	ProfileID  string
+	Definition *AgentContextDefinition
 }
 
 // NewAgentInstance creates an agent instance from config.
@@ -147,12 +144,6 @@ func newAgentInstance(
 
 	restrict := defaults.RestrictToWorkspace
 	allowReadOutside := defaults.AllowReadOutsideWorkspace
-	if opts.RestrictToWorkspace != nil {
-		restrict = *opts.RestrictToWorkspace
-	}
-	if opts.AllowReadOutsideWorkspace != nil {
-		allowReadOutside = *opts.AllowReadOutsideWorkspace
-	}
 	readRestrict := restrict && !allowReadOutside
 
 	// Compile path whitelist patterns from config.
